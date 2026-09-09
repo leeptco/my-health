@@ -57,7 +57,7 @@ function makeIcon(size) {
 }
 
 for (const s of [192, 512]) {
-  const out = path.join(__dirname, '..', 'public', `icon-${s}.png`);
+  const out = path.join(__dirname, '..', 'docs', `icon-${s}.png`);
   fs.writeFileSync(out, makeIcon(s));
   console.log('written', out);
 }

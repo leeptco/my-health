@@ -47,7 +47,12 @@ function toast(msg, err = false) {
 }
 
 // ===================== API =====================
+const LOCAL = !!window.localApi; // автономный режим: данные в этом устройстве, сервера нет
 async function api(method, url, body) {
+  if (LOCAL) {
+    try { return await window.localApi.request(method, url, body); }
+    catch (e) { toast(e.message || 'Ошибка', true); throw e; }
+  }
   const isForm = body instanceof FormData;
   const r = await fetch(url, { method, headers: body && !isForm ? { 'Content-Type': 'application/json' } : undefined, body: isForm ? body : body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { location.href = '/login.html'; throw new Error('auth'); }
@@ -207,10 +212,11 @@ function filesBlock(files = [], label = 'Документы (PDF, фото)') {
     <div class="files">${files.map(fileRow).join('')}</div>
     <input type="file" name="__files" multiple accept="image/*,.pdf,.doc,.docx,.heic,.txt">`;
 }
+const fileHref = (f) => f.url || `/files/${f.id}`;
 function fileRow(f) {
   const isImg = (f.mime || '').startsWith('image/');
-  return `<div class="file" data-file-id="${f.id}">${isImg ? `<img class="thumb" src="/files/${f.id}" alt="">` : '<span>📄</span>'}
-    <a href="/files/${f.id}" target="_blank" rel="noopener">${esc(f.original_name || 'файл')}</a>
+  return `<div class="file" data-file-id="${f.id}">${isImg ? `<img class="thumb" src="${fileHref(f)}" alt="">` : '<span>📄</span>'}
+    <a href="${fileHref(f)}" target="_blank" rel="noopener">${esc(f.original_name || 'файл')}</a>
     <span class="muted small nowrap">${Math.round((f.size || 0) / 1024)} КБ</span>
     <button type="button" class="del" data-del-file="${f.id}" title="Удалить">✕</button></div>`;
 }
@@ -311,7 +317,7 @@ async function viewToday() {
   const backupCard = backupDue ? `<div class="card" style="border:1px solid var(--warn);background:var(--warn-soft)">
       <div class="card-title"><h2>💾 Пора сделать резервную копию</h2></div>
       <p class="small">${t.last_backup ? `Последняя копия — ${fmtDate(t.last_backup)}.` : 'Копий ещё не было.'} Скачай файл и положи в облако или на другой диск. Файлы анализов лежат отдельно в <code>data\\uploads</code>.</p>
-      <a class="btn small primary" href="/api/export" download data-act="backup-done">Скачать копию</a></div>` : '';
+      ${LOCAL ? '<button class="btn small primary" data-act="backup" data-files="1">Сохранить копию</button>' : '<a class="btn small primary" href="/api/export" download data-act="backup-done">Скачать копию</a>'}</div>` : '';
 
   render(`
     ${pageHead('Сегодня', fmtDateLong(t.date))}
@@ -786,7 +792,79 @@ async function medForm(id) {
 }
 
 // ---------- Экспорт / отчёт ----------
-async function viewExport() {
+const fmtBytes = (n) => n == null ? '—' : n < 1048576 ? Math.round(n / 1024) + ' КБ' : (n / 1048576).toFixed(1) + ' МБ';
+async function shareOrDownload(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  // на телефоне — системное меню «Поделиться» (Файлы, AirDrop, Telegram…), на компьютере — обычное скачивание
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return true; } catch (e) { if (e.name === 'AbortError') return false; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+  return true;
+}
+async function doBackup(withFiles) {
+  const data = await window.localApi.exportData({ withFiles });
+  const name = `health-backup-${todayStr()}${withFiles ? '-full' : ''}.json`;
+  if (await shareOrDownload(new Blob([JSON.stringify(data)], { type: 'application/json' }), name)) toast('Копия сохранена');
+}
+function bindImportHandlers() {
+  const imp = $('#import-file');
+  if (imp) imp.onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!confirm('Восстановление ЗАМЕНИТ все текущие данные данными из файла. Продолжить?')) return;
+    try { const data = JSON.parse(await f.text()); await POST('/api/import', data); await loadRefs(); toast('Данные восстановлены'); location.hash = '#today'; }
+    catch (err) { toast('Не удалось прочитать файл: ' + err.message, true); }
+    e.target.value = '';
+  };
+  const hi = $('#health-import');
+  if (hi) hi.onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const st = $('#health-import-status'); st.textContent = `Читаю ${fmtBytes(f.size)}… это может занять минуту.`;
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const r = await POST('/api/import/apple-health', fd);
+      st.textContent = `Готово: записей в файле ${r.records}, дней месячных ${r.menses_days} → эпизодов ${r.episodes} (новых ${r.added}, обновлено ${r.updated}); дней мазни ${r.spotting_days} (добавлено в дневник ${r.spotting_added}).`;
+      toast('Импорт завершён');
+    } catch (err) { st.textContent = 'Ошибка импорта: ' + err.message; }
+    e.target.value = '';
+  };
+}
+const appleHealthCard = () => `<div class="card"><div class="card-title"><h2>🌙 Цикл из Apple Health / Flo</h2></div>
+      <p class="small">Прямого API у Flo и «Здоровья» нет, но данные можно перенести файлом. В Flo включи синхронизацию с Apple Health (Flo → Настройки → Apple Health). Затем на iPhone: <b>Здоровье → фото профиля → Экспортировать медданные</b> → сохрани ZIP в «Файлы», нажми на него — распакуется папка, внутри <code>export.xml</code>. Выбери его здесь: подтянутся дни месячных (как циклы) и межменструальные кровотечения (как записи «Мазня» в дневнике). Повторный импорт ничего не задублирует.</p>
+      <label class="btn primary">Загрузить export.xml<input type="file" accept=".xml,text/xml,application/xml" id="health-import" hidden></label>
+      <p class="small muted mt" id="health-import-status"></p></div>`;
+const reportCard = () => `<div class="card"><div class="card-title"><h2>📄 Отчёт для врача</h2></div>
+      <p class="muted small">Одна страница: самочувствие, визиты, лекарства и анализы за период. Можно распечатать или сохранить в PDF (на iPhone — Поделиться → Напечатать → PDF).</p>
+      <div class="field-row">${F.date('__from', 'С', addDays(todayStr(), -90))}${F.date('__to', 'По', todayStr())}</div>
+      <button class="btn primary" data-act="report">Сформировать отчёт</button></div>`;
+
+async function viewExport() { return LOCAL ? viewExportLocal() : viewExportServer(); }
+
+async function viewExportLocal() {
+  const info = await window.localApi.storageInfo();
+  const t = await GET('/api/today?date=' + todayStr());
+  render(`
+    ${pageHead('Данные и копии')}
+    ${reportCard()}
+    <div class="card"><div class="card-title"><h2>📱 Где хранятся данные</h2></div>
+      <p class="small">Всё лежит <b>внутри этого устройства</b> (в хранилище браузера), никуда не отправляется и работает без интернета. Занято: <b>${fmtBytes(info.usage)}</b>${info.files ? `, вложений: ${info.files}` : ''}${info.persisted === false ? ' · <span style="color:var(--warn)">хранилище не закреплено — добавь приложение на экран «Домой»</span>' : ''}.</p>
+      <p class="small" style="color:var(--danger)"><b>Важно:</b> если удалить иконку приложения с экрана «Домой» или очистить данные Safari — база удалится вместе с ними. Поэтому раз в месяц сохраняй копию (напоминание появится на главной).${t.last_backup ? ` Последняя копия — ${fmtDate(t.last_backup)}.` : ''}</p>
+      <div class="row wrap">
+        <button class="btn primary" data-act="backup" data-files="1">Сохранить копию</button>
+        <button class="btn" data-act="backup" data-files="0">Только данные, без файлов</button>
+        <label class="btn">Восстановить из файла<input type="file" accept=".json,application/json" id="import-file" hidden></label></div>
+      <p class="small muted mt">«Сохранить копию» — полный архив с прикреплёнными PDF и фото (на телефоне откроется меню «Поделиться» — отправь в «Файлы», iCloud или себе в мессенджер). «Только данные» — лёгкий файл без вложений.</p></div>
+    ${appleHealthCard()}
+    <div class="card"><div class="card-title"><h2>💻 Телефон и ноутбук</h2></div>
+      <p class="small">На ноутбуке открой ту же ссылку — там будет своя, отдельная база. Чтобы перенести данные: на телефоне «Сохранить копию» → файл на ноутбук (iCloud, Telegram, почта) → на ноутбуке «Восстановить из файла». И в обратную сторону так же. Автоматической синхронизации в этом режиме нет — актуальной считай ту копию, где записывала последней.</p></div>
+    <div class="card"><div class="card-title"><h2>🏠 Как поставить на iPhone</h2></div>
+      <p class="small">Открой эту ссылку в Safari → кнопка «Поделиться» → «На экран Домой». Дальше открывай только с иконки: так данные хранятся надёжнее и приложение работает без сети.</p></div>
+  `);
+  bindImportHandlers();
+}
+
+async function viewExportServer() {
   const y = todayStr().slice(0, 4);
   render(`
     ${pageHead('Экспорт и резервные копии')}
@@ -893,11 +971,12 @@ const actions = {
   'med-new': () => medForm(), 'med-edit': (d) => medForm(d.id),
   'report': () => { location.hash = `#report?from=${$('[name="__from"]').value}&to=${$('[name="__to"]').value}`; },
   'backup-done': () => { setTimeout(route, 2000); },
+  'backup': async (d) => { await doBackup(d.files === '1'); route(); },
   'print': () => window.print(),
 };
 
 view.addEventListener('click', (e) => {
-  if (e.target.closest('a[href^="http"], a[href^="tel:"], a[href^="/files/"]')) return;
+  if (e.target.closest('a[href^="http"], a[href^="tel:"], a[href^="/files/"], a[href^="blob:"]')) return;
   const el = e.target.closest('[data-act]');
   if (!el || !view.contains(el)) return;
   if (el.tagName === 'SELECT') return;
@@ -978,3 +1057,4 @@ async function route() {
 }
 window.addEventListener('hashchange', route);
 (async () => { try { await loadRefs(); } catch {} route(); })();
+if (LOCAL && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});

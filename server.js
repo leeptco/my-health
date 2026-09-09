@@ -67,7 +67,11 @@ app.post('/login', (req, res) => {
 });
 app.post('/logout', (req, res) => { res.clearCookie('hs'); res.redirect('/login.html'); });
 
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+// Главную отдаём с флагом серверного режима: фронтенд тогда ходит в API, а не в локальную базу браузера
+const STATIC_DIR = path.join(__dirname, 'docs');
+const indexHtml = () => fs.readFileSync(path.join(STATIC_DIR, 'index.html'), 'utf8').replace('<script src="./localapi.js"></script>', '<script>window.HEALTH_SERVER = true;</script>');
+app.get(['/', '/index.html'], (req, res) => res.type('html').send(indexHtml()));
+app.use(express.static(STATIC_DIR, { extensions: ['html'] }));
 
 // ---------- Вспомогательное ----------
 const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD в локальной зоне сервера
