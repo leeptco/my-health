@@ -170,7 +170,7 @@ function refSelect(kind, value, label) {
     medication: { name: 'medication_id', items: refs.medications, lbl: medLabel, add: '＋ Новый препарат', fields: `
       ${F.text('new_med_name', 'Название препарата', '', 'placeholder="Монурал, Канефрон, Джес…"')}
       <div class="field-row">${F.select('new_med_form', 'Форма', MED_FORMS, 'Таблетки', { none: null })}${F.text('new_med_strength', 'Дозировка', '', 'placeholder="500 мг, 3 г, 5 мл"')}</div>` },
-    episode: { name: 'episode_id', items: refs.episodes, lbl: e => `${e.title} (${fmtDate(e.start_date)}${e.end_date ? ' – ' + fmtDate(e.end_date) : ', сейчас'})`, add: '＋ Новая болезнь / эпизод', fields: `
+    episode: { name: 'episode_id', items: [...refs.episodes].sort((a, b) => (b.chronic || 0) - (a.chronic || 0)), lbl: e => e.chronic ? `${e.title} · хроническая` : `${e.title} (${fmtDate(e.start_date)}${e.end_date ? ' – ' + fmtDate(e.end_date) : ', сейчас'})`, add: '＋ Новая болезнь / эпизод', fields: `
       ${F.text('new_episode_title', 'Название', '', 'placeholder="Цистит, ОРВИ, мигрень…"')}${F.date('new_episode_start', 'Началось', todayStr())}` },
   }[kind];
   const options = conf.items.map(i => `<option value="${i.id}" ${Number(value) === i.id ? 'selected' : ''}>${esc(conf.lbl(i))}</option>`).join('');
@@ -273,8 +273,30 @@ const pageHead = (title, sub, actions = '') => `<div class="page-head"><div><h1>
 const addBtn = (act, label) => `<button class="btn primary small desk-only" data-act="${act}">＋ ${label}</button>`;
 
 // ---------- Сегодня ----------
+// Хорошие новости: сколько дней ничего не болит и как давно не было конкретных симптомов
+function goodNewsCard(diary, today) {
+  if (!diary.length) return '';
+  const isBad = (d) => (d.feeling && d.feeling <= 2) || (d.symptoms || []).length > 0;
+  const bad = diary.filter(d => isBad(d) && d.date <= today);
+  const lastBad = bad.map(d => d.date).sort().pop();
+  const first = diary.map(d => d.date).sort()[0];
+  const streak = lastBad ? daysBetween(lastBad, today) : daysBetween(first, today) + 1;
+  const since90 = addDays(today, -90);
+  const good90 = 90 - new Set(bad.filter(d => d.date > since90).map(d => d.date)).size;
+  const last = {}, cnt = {};
+  for (const d of diary) for (const s of d.symptoms || []) { cnt[s] = (cnt[s] || 0) + 1; if (!last[s] || d.date > last[s]) last[s] = d.date; }
+  // симптомы, которых не было дольше общей серии — их и отмечаем
+  const chips = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 8).map(s => ({ s, n: daysBetween(last[s], today) })).filter(x => x.n > streak).sort((a, b) => b.n - a.n).slice(0, 4);
+  const word = (n) => plural(n, 'день', 'дня', 'дней').replace(/^\d+\s*/, '');
+  const head = streak === 0
+    ? `<p>Сегодня непросто — бывает. Зато хороших дней за последние 90 было <b>${good90}</b>.</p>`
+    : `<div class="row" style="align-items:baseline;gap:12px"><div style="font-size:42px;font-weight:700;color:var(--accent);line-height:1">${streak}</div><div><div><b>${word(streak)}</b> ничего не болит</div><div class="small muted">хороших дней за 90: ${good90}</div></div></div>`;
+  return `<div class="card" style="background:var(--accent-soft)"><div class="card-title"><h2>🌿 Хорошие новости</h2></div>${head}
+    ${chips.length ? `<div class="chips mt">${chips.map(c => `<span class="chip">${c.n} дн. без «${esc(c.s)}»</span>`).join('')}</div>` : ''}</div>`;
+}
+
 async function viewToday() {
-  const [t, upcomingVisits] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`)]);
+  const [t, upcomingVisits, allDiary] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`), GET('/api/diary')]);
   const upcoming = upcomingVisits.filter(v => v.date > todayStr() || !v.conclusion).sort((a, b) => a.date.localeCompare(b.date));
   const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>🩺 Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
       ${upcoming.map(v => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="pill-row" data-act="visit-edit" data-id="${v.id}" style="cursor:pointer"><div class="info"><div class="name">${d ? esc(d.name) : 'Врач'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
@@ -311,7 +333,7 @@ async function viewToday() {
       <button class="icon-btn" data-act="reminder-edit" data-id="${r.id}" aria-label="Изменить">✎</button></div>`;
   }).join('') : '<p class="muted">Ближайших напоминаний нет</p>';
 
-  const eps = t.episodes.length ? t.episodes.map(e => `<div class="pill-row" data-act="episode-edit" data-id="${e.id}" style="cursor:pointer"><div class="info"><div class="name">${esc(e.title)}</div><div class="dose">с ${fmtDate(e.start_date)} · ${plural(daysBetween(e.start_date, t.date) + 1, 'день', 'дня', 'дней')}${e.diagnosis ? ' · ' + esc(e.diagnosis) : ''}</div></div><span class="muted">›</span></div>`).join('') : '';
+  const eps = t.episodes.length ? t.episodes.map(e => `<div class="pill-row" data-act="episode-open" data-id="${e.id}" style="cursor:pointer"><div class="info"><div class="name">${esc(e.title)}</div><div class="dose">с ${fmtDate(e.start_date)} · ${plural(daysBetween(e.start_date, t.date) + 1, 'день', 'дня', 'дней')}${e.diagnosis ? ' · ' + esc(e.diagnosis) : ''}</div></div><span class="muted">›</span></div>`).join('') : '';
 
   const diary = t.diary.length ? t.diary.map(d => diaryItem(d)).join('') : '<p class="muted">Записей пока нет</p>';
 
@@ -321,7 +343,7 @@ async function viewToday() {
   const backupDue = t.has_data && (!t.last_backup || daysBetween(t.last_backup, t.date) >= 30);
   const backupCard = backupDue ? `<div class="card" style="border:1px solid var(--warn);background:var(--warn-soft)">
       <div class="card-title"><h2>💾 Пора сделать резервную копию</h2></div>
-      <p class="small">${t.last_backup ? `Последняя копия — ${fmtDate(t.last_backup)}.` : 'Копий ещё не было.'} Скачай файл и положи в облако или на другой диск. Файлы анализов лежат отдельно в <code>data\\uploads</code>.</p>
+      <p class="small">${t.last_backup ? `Последняя копия — ${fmtDate(t.last_backup)}.` : 'Копий ещё не было.'} ${LOCAL ? 'Сохрани файл в «Файлы», iCloud или отправь себе — в него войдут и прикреплённые документы.' : 'Скачай файл и положи в облако или на другой диск. Файлы анализов лежат отдельно в <code>data\\uploads</code>.'}</p>
       ${LOCAL ? '<button class="btn small primary" data-act="backup" data-files="1">Сохранить копию</button>' : '<a class="btn small primary" href="/api/export" download data-act="backup-done">Скачать копию</a>'}</div>` : '';
 
   render(`
@@ -333,13 +355,15 @@ async function viewToday() {
     ${kokCard}
     <div class="card"><div class="card-title"><h2>🔔 Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
     ${eps ? `<div class="card"><div class="card-title"><h2>🤒 Сейчас болею</h2><a href="#episodes" class="small">Все →</a></div>${eps}</div>` : ''}
-    <div class="grid3">
-      <div class="stat"><div class="v">${t.stats.bad_days}</div><div class="l">плохих дней за 90</div></div>
-      <div class="stat"><div class="v">${t.stats.visits}</div><div class="l">визитов за 90 дней</div></div>
-      ${cyc || `<div class="stat"><div class="v">${money(t.stats.spent_year)}</div><div class="l">расходы за ${t.date.slice(0, 4)}</div></div>`}
-    </div>
-    <div class="card mt"><div class="card-title"><h2>📊 Симптомы за 90 дней</h2></div>${hbars(t.stats.symptoms)}</div>
+    ${goodNewsCard(allDiary, t.date)}
     <div class="card"><div class="card-title"><h2>📝 Последние записи</h2><a href="#diary" class="small">Дневник →</a></div><div class="list">${diary}</div></div>
+    <details class="card"><summary class="small muted" style="cursor:pointer">Статистика за 90 дней</summary>
+      <div class="grid3 mt">
+        <div class="stat"><div class="v">${t.stats.bad_days}</div><div class="l">плохих дней за 90</div></div>
+        <div class="stat"><div class="v">${t.stats.visits}</div><div class="l">визитов за 90 дней</div></div>
+        ${cyc || `<div class="stat"><div class="v">${money(t.stats.spent_year)}</div><div class="l">расходы за ${t.date.slice(0, 4)}</div></div>`}
+      </div>
+      <div class="mt">${hbars(t.stats.symptoms)}</div></details>
   `);
 }
 
@@ -363,7 +387,8 @@ async function viewDiary() {
   const groups = groupBy(items, d => d.date.slice(0, 7));
   render(`
     ${pageHead('Дневник', plural(all.length, 'запись', 'записи', 'записей'), addBtn('diary-new', 'Запись'))}
-    ${used.length ? `<div class="chips mb"><span class="chip ${!diaryState.filter ? 'on' : ''}" data-act="filter-sym" data-sym="">Все</span>${used.map(s => `<span class="chip ${diaryState.filter === s ? 'on' : ''}" data-act="filter-sym" data-sym="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
+    ${used.length ? `<details class="mb" ${diaryState.filter ? 'open' : ''}><summary class="small" style="cursor:pointer;color:var(--accent)">${diaryState.filter ? `Фильтр: <b>${esc(diaryState.filter)}</b> · изменить` : 'Отфильтровать по симптому'}</summary>
+      <div class="chips mt"><span class="chip ${!diaryState.filter ? 'on' : ''}" data-act="filter-sym" data-sym="">Все</span>${used.map(s => `<span class="chip ${diaryState.filter === s ? 'on' : ''}" data-act="filter-sym" data-sym="${esc(s)}">${esc(s)}</span>`).join('')}</div></details>` : ''}
     ${items.length ? Object.entries(groups).map(([m, list]) => `<div class="group-label">${MONTHS_NOM[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}</div><div class="list">${list.map(diaryItem).join('')}</div>`).join('')
       : '<div class="empty">Записей нет. Нажми ＋, чтобы записать, как ты себя чувствуешь.</div>'}
     ${fab('diary-new')}
@@ -712,42 +737,123 @@ async function cycleForm(id) {
 }
 
 // ---------- Болезни (эпизоды) ----------
-async function viewEpisodes() {
+// Хроническая болезнь — постоянная карточка (тонзиллит, эндометриоз); обострения — отдельные эпизоды с parent_id.
+const epTag = (e) => e.chronic ? '<span class="tag accent">хроническая</span>' : (!e.end_date ? '<span class="tag warn">сейчас</span>' : '');
+function episodeItem(e, ctx, today = todayStr()) {
+  const n = (arr) => arr.filter(x => x.episode_id === e.id).length;
+  const flares = ctx.eps.filter(x => x.parent_id === e.id).length;
+  const parts = [[n(ctx.diary), 'записей'], [n(ctx.visits), 'визитов'], [n(ctx.courses), 'курсов'], [n(ctx.labs), 'анализов'], [flares, 'обострений']].filter(p => p[0]).map(p => `${p[0]} ${p[1]}`);
+  const len = daysBetween(e.start_date, e.end_date || today) + 1;
+  const parent = e.parent_id ? ctx.eps.find(x => x.id === e.parent_id) : null;
+  const when = e.chronic ? `с ${fmtDate(e.start_date)}${e.end_date ? ` · ремиссия с ${fmtDate(e.end_date)}` : ''}` : `${fmtDate(e.start_date)} – ${e.end_date ? fmtDate(e.end_date) : '…'} · ${plural(len, 'день', 'дня', 'дней')}`;
+  return `<div class="item" data-act="episode-open" data-id="${e.id}">${dateCol(e.start_date)}<div class="body">
+    <div class="title">${esc(e.title)} ${epTag(e)}</div>
+    <div class="sub">${when}${parent ? ` · обострение: ${esc(parent.title)}` : ''}</div>
+    ${e.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(e.diagnosis)}</div>` : ''}
+    ${parts.length ? `<div class="meta">${parts.join(' · ')}</div>` : ''}
+  </div></div>`;
+}
+async function loadEpisodeCtx() {
   const [eps, diary, visits, courses, labs] = await Promise.all([GET('/api/episodes'), GET('/api/diary'), GET('/api/visits'), GET('/api/courses'), GET('/api/labs')]);
-  const today = todayStr();
-  const item = (e) => {
-    const n = (arr) => arr.filter(x => x.episode_id === e.id).length;
-    const parts = [[n(diary), 'записей'], [n(visits), 'визитов'], [n(courses), 'курсов'], [n(labs), 'анализов']].filter(p => p[0]).map(p => `${p[0]} ${p[1]}`);
-    const len = daysBetween(e.start_date, e.end_date || today) + 1;
-    return `<div class="item" data-act="episode-edit" data-id="${e.id}">${dateCol(e.start_date)}<div class="body">
-      <div class="title">${esc(e.title)} ${!e.end_date ? '<span class="tag warn">сейчас</span>' : ''}</div>
-      <div class="sub">${fmtDate(e.start_date)} – ${e.end_date ? fmtDate(e.end_date) : '…'} · ${plural(len, 'день', 'дня', 'дней')}</div>
-      ${e.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(e.diagnosis)}</div>` : ''}
-      ${parts.length ? `<div class="meta">${parts.join(' · ')}</div>` : ''}
-    </div></div>`;
-  };
-  const open = eps.filter(e => !e.end_date), closed = eps.filter(e => e.end_date);
+  return { eps, diary, visits, courses, labs };
+}
+async function viewEpisodes() {
+  const ctx = await loadEpisodeCtx();
+  const chronic = ctx.eps.filter(e => e.chronic);
+  const acute = ctx.eps.filter(e => !e.chronic);
+  const open = acute.filter(e => !e.end_date), closed = acute.filter(e => e.end_date);
+  const item = (e) => episodeItem(e, ctx);
   render(`
-    ${pageHead('Болезни', 'история эпизодов: к каждому привязаны дневник, визиты, лекарства и анализы', addBtn('episode-new', 'Эпизод'))}
-    ${open.length ? `<div class="group-label">Сейчас</div><div class="list">${open.map(item).join('')}</div>` : ''}
+    ${pageHead('Болезни', 'нажми на болезнь — откроется всё по ней: заключения, лекарства, анализы, документы', addBtn('episode-new', 'Болезнь'))}
+    ${chronic.length ? `<div class="group-label">Хронические</div><div class="list">${chronic.map(item).join('')}</div>` : ''}
+    ${open.length ? `<div class="group-label">Сейчас болею</div><div class="list">${open.map(item).join('')}</div>` : ''}
     <div class="group-label">История</div>
-    <div class="list">${closed.length ? closed.map(item).join('') : '<div class="empty">Завершённых эпизодов нет</div>'}</div>
+    <div class="list">${closed.length ? closed.map(item).join('') : `<div class="empty">${ctx.eps.length ? 'Завершённых эпизодов нет' : 'Пока пусто. Добавь хронические болезни (тонзиллит, эндометриоз…) и отдельные случаи — ОРВИ, цистит, разовая боль.'}</div>`}</div>
     ${fab('episode-new')}
   `);
 }
-async function episodeForm(id) {
-  const row = id ? await GET(`/api/episodes/${id}`) : { start_date: todayStr() };
+
+// Read-only список вложений (без кнопок удаления — они в формах)
+function fileLinks(files) {
+  if (!files?.length) return '';
+  return `<div class="files mt">${files.map(f => `<a class="file" href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img class="thumb" src="${fileHref(f)}" alt="">` : '<span>📄</span>'}<span>${esc(f.original_name || 'файл')}</span></a>`).join('')}</div>`;
+}
+function resultsTable(results) {
+  if (!results?.length) return '';
+  return `<table class="res-table mt">${results.map(r => {
+    const out = r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max));
+    const val = r.value != null ? r.value : (r.value_text || '—');
+    const ref = r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''}–${r.ref_max ?? ''}` : '';
+    return `<tr><td>${esc(r.indicator)}</td><td class="${out ? 'out' : ''}">${esc(String(val))}${out ? ' ⚠️' : ''}</td><td class="muted">${esc(r.unit || '')}</td><td class="muted">${ref}</td></tr>`;
+  }).join('')}</table>`;
+}
+// Страница одной болезни: всё, что к ней привязано, в одном месте
+async function viewEpisode(params) {
+  const id = Number(params.id);
+  if (!id) return viewEpisodes();
+  const [e, ctx] = await Promise.all([loadFull('episodes', id), loadEpisodeCtx()]);
+  const today = todayStr();
+  const children = ctx.eps.filter(x => x.parent_id === id).sort((a, b) => b.start_date.localeCompare(a.start_date));
+  const ids = new Set([id, ...children.map(c => c.id)]);
+  const of = (arr) => arr.filter(x => ids.has(x.episode_id));
+  const [visits, labs] = await Promise.all([Promise.all(of(ctx.visits).map(v => loadFull('visits', v.id))), Promise.all(of(ctx.labs).map(l => loadFull('labs', l.id)))]);
+  const diary = of(ctx.diary), courses = of(ctx.courses);
+  const parent = e.parent_id ? ctx.eps.find(x => x.id === e.parent_id) : null;
+  const allFiles = [
+    ...(e.files || []).map(f => ({ ...f, cap: 'Болезнь' })),
+    ...visits.flatMap(v => (v.files || []).map(f => ({ ...f, cap: `Визит ${fmtDate(v.date)}` }))),
+    ...labs.flatMap(l => (l.files || []).map(f => ({ ...f, cap: `${l.name} · ${fmtDate(l.date)}` }))),
+  ];
+  const len = daysBetween(e.start_date, e.end_date || today) + 1;
+  const when = e.chronic ? `с ${fmtDate(e.start_date)}${e.end_date ? ` · ремиссия с ${fmtDate(e.end_date)}` : ''}` : `${fmtDate(e.start_date)} – ${e.end_date ? fmtDate(e.end_date) : 'сейчас'} · ${plural(len, 'день', 'дня', 'дней')}`;
+  const visitCard = (v) => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}<div class="body">
+      <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${v.dms ? ' <span class="tag accent">ДМС</span>' : ''}</div>
+      ${p ? `<div class="sub">📍 ${esc(p.name)}</div>` : ''}
+      ${v.reason ? `<div class="meta"><b>С чем пришла:</b> ${esc(v.reason)}</div>` : ''}
+      ${v.conclusion ? `<div class="mt small"><b>Заключение:</b> ${esc(v.conclusion)}</div>` : ''}
+      ${v.diagnosis ? `<div class="small"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
+      ${v.referrals ? `<div class="small"><b>Направления:</b> ${esc(v.referrals)}</div>` : ''}
+      ${v.next_date ? `<div class="small muted">Повтор: ${fmtDate(v.next_date)}</div>` : ''}
+      ${fileLinks(v.files)}</div></div>`; };
+  const labCard = (l) => `<div class="item" data-act="lab-edit" data-id="${l.id}">${dateCol(l.date)}<div class="body">
+      <div class="title">${esc(l.name)}${l.dms ? ' <span class="tag accent">ДМС</span>' : ''}</div>
+      ${l.place_id && place(l.place_id) ? `<div class="sub">📍 ${esc(place(l.place_id).name)}</div>` : ''}
+      ${resultsTable(l.results)}
+      ${l.note ? `<div class="meta">${esc(l.note)}</div>` : ''}
+      ${fileLinks(l.files)}</div></div>`;
+  const courseRow = (c) => { const m = med(c.medication_id); return `<div class="pill-row" data-act="course-edit" data-id="${c.id}" style="cursor:pointer"><div class="info"><div class="name">${esc(m?.name || 'Препарат')}${m?.strength ? ` <span class="muted">${esc(m.strength)}</span>` : ''}</div>
+      <div class="dose">${esc([c.dose, c.per_day ? c.per_day + ' р/день' : ''].filter(Boolean).join(', '))} · ${fmtDate(c.start_date)}${c.end_date ? ' – ' + fmtDate(c.end_date) : ''}${c.purpose ? ' — ' + esc(c.purpose) : ''}</div></div><span class="muted">›</span></div>`; };
+  render(`
+    <div class="page-head"><div><a href="#episodes" class="small">← Болезни</a><h1>${esc(e.title)} ${epTag(e)}</h1><div class="sub">${when}${parent ? ` · обострение: <a href="#episode?id=${parent.id}">${esc(parent.title)}</a>` : ''}</div></div>
+      <div class="row no-print"><button class="btn small" data-act="episode-edit" data-id="${e.id}">✎ Править</button></div></div>
+    ${e.diagnosis || e.note ? `<div class="card">${e.diagnosis ? `<p><b>Диагноз:</b> ${esc(e.diagnosis)}</p>` : ''}${e.note ? `<p class="small mt">${esc(e.note)}</p>` : ''}</div>` : ''}
+    ${e.chronic ? `<div class="card"><div class="card-title"><h2>🔥 Обострения</h2><button class="btn small ghost" data-act="episode-new-flare" data-id="${e.id}">＋ Обострение</button></div>
+      ${children.length ? `<div class="list">${children.map(c => episodeItem(c, ctx, today)).join('')}</div>` : '<p class="muted small">Обострений не записано. Когда болезнь даст о себе знать — добавь обострение, и к нему привяжутся визиты и лекарства того периода.</p>'}</div>` : ''}
+    ${visits.length ? `<div class="card"><div class="card-title"><h2>🩺 Визиты и заключения</h2></div><div class="list">${visits.map(visitCard).join('')}</div></div>` : ''}
+    ${courses.length ? `<div class="card"><div class="card-title"><h2>💊 Лекарства</h2></div>${courses.map(courseRow).join('')}</div>` : ''}
+    ${labs.length ? `<div class="card"><div class="card-title"><h2>🧪 Анализы</h2></div><div class="list">${labs.map(labCard).join('')}</div></div>` : ''}
+    ${diary.length ? `<div class="card"><div class="card-title"><h2>📝 Дневник</h2><span class="small muted">${plural(diary.length, 'запись', 'записи', 'записей')}</span></div><div class="list">${diary.map(diaryItem).join('')}</div></div>` : ''}
+    ${allFiles.length ? `<div class="card"><div class="card-title"><h2>📎 Все документы</h2><span class="small muted">${allFiles.length}</span></div>
+      <div class="gallery">${allFiles.map(f => `<a href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img src="${fileHref(f)}" alt="">` : '<div class="doc">📄</div>'}<span class="cap">${esc(f.original_name || 'файл')}<br>${esc(f.cap)}</span></a>`).join('')}</div></div>` : ''}
+    ${!visits.length && !courses.length && !labs.length && !diary.length && !allFiles.length ? '<div class="empty">К этой болезни пока ничего не привязано. В формах визита, анализа, лекарства и дневника есть поле «Относится к болезни» — выбери её там.</div>' : ''}
+  `);
+}
+async function episodeForm(id, preset = {}) {
+  const row = id ? await GET(`/api/episodes/${id}`) : { start_date: todayStr(), ...preset };
+  const chronicList = refs.episodes.filter(e => e.chronic && e.id !== Number(id));
   openSheet({
-    title: id ? 'Эпизод болезни' : 'Новая болезнь',
-    body: `${F.text('title', 'Название', row.title, 'required placeholder="Цистит, ОРВИ, мигрень…"')}
-      <div class="field-row">${F.date('start_date', 'Началось', row.start_date, 'required')}${F.date('end_date', 'Закончилось', row.end_date)}</div>
+    title: id ? 'Болезнь' : 'Новая болезнь',
+    body: `${F.text('title', 'Название', row.title, 'required placeholder="Тонзиллит, цистит, ОРВИ, мигрень…"')}
+      ${F.check('chronic', 'Хроническая болезнь (тонзиллит, эндометриоз, гастрит…)', row.chronic, 'data-chronic-toggle')}
+      <div id="parent-box" ${row.chronic ? 'hidden' : ''}>${chronicList.length ? F.select('parent_id', 'Это обострение хронической болезни', chronicList.map(e => [e.id, e.title]), row.parent_id, { none: '— нет, отдельный случай —' }) : ''}</div>
+      <div class="field-row">${F.date('start_date', 'Началось', row.start_date, 'required')}${F.date('end_date', 'Закончилось / ремиссия', row.end_date)}</div>
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
       ${F.area('note', 'Заметка', row.note, 'Как протекало, что помогло')}
       ${id && !row.end_date ? `<button type="button" class="btn small mb" data-set-today="end_date">Закончилось сегодня</button>` : ''}
       ${filesBlock(row.files || [])}`,
-    onSubmit: async (d, form) => { const s = await save('episodes', { ...d, id }); await uploadFiles(form, 'episodes', s.id); await loadRefs(); toast('Сохранено'); route(); },
-    onDelete: id ? async () => { await DEL(`/api/episodes/${id}`); await loadRefs(); route(); } : null,
-    deleteConfirm: 'Удалить эпизод? Связанные записи останутся, но отвяжутся от него.',
+    onSubmit: async (d, form) => { if (d.chronic) d.parent_id = null; const s = await save('episodes', { ...d, id }); await uploadFiles(form, 'episodes', s.id); await loadRefs(); toast('Сохранено'); route(); },
+    onDelete: id ? async () => { await DEL(`/api/episodes/${id}`); await loadRefs(); location.hash = '#episodes'; route(); } : null,
+    deleteConfirm: 'Удалить болезнь? Связанные записи останутся, но отвяжутся от неё.',
   });
 }
 
@@ -1028,6 +1134,8 @@ const actions = {
   'cycle-end': async () => { const c = (await GET('/api/cycles')).find(x => !x.end_date); if (c) await PUT(`/api/cycles/${c.id}`, { end_date: todayStr() }); route(); },
   'cycle-new': () => cycleForm(), 'cycle-edit': (d) => cycleForm(d.id),
   'episode-new': () => episodeForm(), 'episode-edit': (d) => episodeForm(d.id),
+  'episode-open': (d) => { location.hash = `#episode?id=${d.id}`; },
+  'episode-new-flare': (d) => { const p = episode(d.id); episodeForm(null, { parent_id: Number(d.id), title: p ? `Обострение: ${p.title}` : '' }); },
   'expense-new': () => expenseForm(), 'expense-edit': (d) => expenseForm(d.id),
   'expense-year': (d) => { expState.year = d.year; viewExpenses({}); },
   'reminder-new': () => reminderForm(), 'reminder-edit': (d) => reminderForm(d.id),
@@ -1114,6 +1222,7 @@ sheetForm.addEventListener('change', (e) => {
   }
   if (el.dataset.perDay !== undefined) { const n = Math.min(6, Math.max(1, Number(el.value) || 1)); el.value = n; $('#times-box', sheetForm).innerHTML = timesInputs(n); }
   if (el.dataset.kokToggle !== undefined) { $('#kok-box', sheetForm).hidden = !el.checked; }
+  if (el.dataset.chronicToggle !== undefined) { const pb = $('#parent-box', sheetForm); if (pb) pb.hidden = el.checked; }
 });
 sheetForm.addEventListener('input', (e) => {
   const el = e.target;
@@ -1140,7 +1249,7 @@ $$('#sheet [data-close]').forEach(el => el.addEventListener('click', closeSheet)
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
 // ===================== Роутер =====================
-const VIEWS = { today: viewToday, diary: viewDiary, visits: viewVisits, meds: viewMeds, labs: viewLabs, cycle: viewCycle, episodes: viewEpisodes, expenses: viewExpenses, refs: viewRefs, export: viewExport, report: viewReport, more: viewMore };
+const VIEWS = { today: viewToday, diary: viewDiary, visits: viewVisits, meds: viewMeds, labs: viewLabs, cycle: viewCycle, episodes: viewEpisodes, episode: viewEpisode, expenses: viewExpenses, refs: viewRefs, export: viewExport, report: viewReport, more: viewMore };
 const MOB_TABS = new Set(['today', 'diary', 'visits', 'meds']);
 async function route() {
   if (sheet.open) { sheet.pushed = false; closeSheet(true); } // переход по разделам закрывает открытую форму

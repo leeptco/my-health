@@ -10,7 +10,7 @@
     places:      { cols: ['name', 'type', 'address', 'phone', 'note'], order: [['name', 1, NOCASE]] },
     doctors:     { cols: ['name', 'specialty', 'phone', 'place_id', 'note'], num: ['place_id'], order: [['name', 1, NOCASE]] },
     medications: { cols: ['name', 'form', 'strength', 'note'], order: [['name', 1, NOCASE]] },
-    episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'note'], order: [['start_date', -1]] },
+    episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'chronic', 'parent_id', 'note'], num: ['chronic', 'parent_id'], defaults: { chronic: 0 }, order: [['start_date', -1]] },
     diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'], json: ['symptoms'],
                    num: ['feeling', 'severity', 'temperature', 'episode_id'], order: [['date', -1], ['time', -1], ['id', -1]] },
     visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'dms', 'note'],
@@ -170,7 +170,10 @@
     for (const f of rows('files').filter(f => f.entity_type === t && f.entity_id === id)) await deleteFile(f.id);
     if (t === 'courses') S.tables.intakes = rows('intakes').filter(i => i.course_id !== id);
     if (t === 'labs') S.tables.lab_results = rows('lab_results').filter(r => r.lab_id !== id);
-    if (t === 'episodes') for (const tt of ['diary', 'visits', 'courses', 'labs']) for (const r of rows(tt)) if (r.episode_id === id) r.episode_id = null;
+    if (t === 'episodes') {
+      for (const tt of ['diary', 'visits', 'courses', 'labs']) for (const r of rows(tt)) if (r.episode_id === id) r.episode_id = null;
+      for (const r of rows('episodes')) if (r.parent_id === id) r.parent_id = null;
+    }
   }
 
   // ---------- Файлы ----------
@@ -222,7 +225,8 @@
       return { ...c, med_name: m.name, med_form: m.form, med_strength: m.strength, slots, on_break: onBreak };
     });
     const reminders = sorted('reminders', rows('reminders').filter(r => !r.done && r.date <= addDays(date, 14)));
-    const episodes = sorted('episodes', rows('episodes').filter(e => !e.end_date));
+    // «Сейчас болею» — только острые эпизоды; хронические болезни живут в своём разделе
+    const episodes = sorted('episodes', rows('episodes').filter(e => !e.end_date && !e.chronic));
     const diary = list('diary', { limit: 3 });
     const starts = rows('cycles').filter(c => c.start_date <= date).map(c => c.start_date).sort().reverse().slice(0, 7);
     let cycle = null;

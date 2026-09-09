@@ -147,7 +147,10 @@ function afterDelete(table, id) {
   }
   if (table === 'courses') run('DELETE FROM intakes WHERE course_id = ?', [id]);
   if (table === 'labs') run('DELETE FROM lab_results WHERE lab_id = ?', [id]);
-  if (table === 'episodes') for (const t of ['diary', 'visits', 'courses', 'labs']) run(`UPDATE ${t} SET episode_id = NULL WHERE episode_id = ?`, [id]);
+  if (table === 'episodes') {
+    for (const t of ['diary', 'visits', 'courses', 'labs']) run(`UPDATE ${t} SET episode_id = NULL WHERE episode_id = ?`, [id]);
+    run('UPDATE episodes SET parent_id = NULL WHERE parent_id = ?', [id]);
+  }
 }
 
 // ---------- Специальные эндпоинты (до универсального CRUD) ----------
@@ -191,7 +194,7 @@ app.get('/api/today', (req, res) => {
   });
 
   const reminders = all('SELECT * FROM reminders WHERE done = 0 AND date <= ? ORDER BY date', [addDays(date, 14)]);
-  const episodes = all('SELECT * FROM episodes WHERE end_date IS NULL ORDER BY start_date DESC');
+  const episodes = all('SELECT * FROM episodes WHERE end_date IS NULL AND COALESCE(chronic, 0) = 0 ORDER BY start_date DESC');
   const diary = list('diary', { limit: 3 });
 
   const starts = all('SELECT start_date FROM cycles WHERE start_date <= ? ORDER BY start_date DESC LIMIT 7', [date]).map(r => r.start_date);

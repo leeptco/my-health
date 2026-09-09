@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS diary_date ON diary(date);
 `);
 
 // Миграции: новые колонки для уже существующих баз
-for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0']]) {
+for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0'], ['episodes', 'chronic', 'INTEGER DEFAULT 0'], ['episodes', 'parent_id', 'INTEGER']]) {
   const cols = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`);
 }
@@ -103,7 +103,7 @@ const TABLES = {
   places:      { cols: ['name', 'type', 'address', 'phone', 'note'], order: 'name COLLATE NOCASE' },
   doctors:     { cols: ['name', 'specialty', 'phone', 'place_id', 'note'], num: ['place_id'], order: 'name COLLATE NOCASE' },
   medications: { cols: ['name', 'form', 'strength', 'note'], order: 'name COLLATE NOCASE' },
-  episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'note'], order: 'start_date DESC' },
+  episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'chronic', 'parent_id', 'note'], num: ['chronic', 'parent_id'], order: 'start_date DESC' },
   diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'],
                  json: ['symptoms'], num: ['feeling', 'severity', 'temperature', 'episode_id'], order: 'date DESC, time DESC, id DESC' },
   visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'dms', 'note'],
