@@ -1,0 +1,34 @@
+# Запуск на сервере: приложение + Caddy (автоматический HTTPS от Let's Encrypt).
+# Перед запуском создай на сервере файл .env (см. .env.example) с HEALTH_PASSWORD и DOMAIN.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      HEALTH_PASSWORD: ${HEALTH_PASSWORD:?Задай HEALTH_PASSWORD в .env}
+      SECURE_COOKIE: "1"
+      DATA_DIR: /data
+      PORT: "3000"
+    volumes:
+      - ./data:/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Задай DOMAIN в .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

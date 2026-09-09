@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Здоровье</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Здоровье">
+<meta name="theme-color" content="#f6f4ef">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <nav id="nav" aria-label="Разделы">
+    <div class="nav-brand">Здоровье</div>
+    <a href="#today" data-tab="today"><span class="ico">☀️</span><span>Сегодня</span></a>
+    <a href="#diary" data-tab="diary"><span class="ico">📝</span><span>Дневник</span></a>
+    <a href="#visits" data-tab="visits"><span class="ico">🩺</span><span>Визиты</span></a>
+    <a href="#meds" data-tab="meds"><span class="ico">💊</span><span>Лекарства</span></a>
+    <a href="#labs" data-tab="labs" class="desk"><span class="ico">🧪</span><span>Анализы</span></a>
+    <a href="#cycle" data-tab="cycle" class="desk"><span class="ico">🌙</span><span>Цикл</span></a>
+    <a href="#episodes" data-tab="episodes" class="desk"><span class="ico">🤒</span><span>Болезни</span></a>
+    <a href="#expenses" data-tab="expenses" class="desk"><span class="ico">₽</span><span>Расходы</span></a>
+    <a href="#refs" data-tab="refs" class="desk"><span class="ico">📇</span><span>Справочники</span></a>
+    <a href="#export" data-tab="export" class="desk"><span class="ico">💾</span><span>Экспорт</span></a>
+    <a href="#more" data-tab="more" class="mob"><span class="ico">⋯</span><span>Ещё</span></a>
+  </nav>
+  <main id="view"><div class="loading">Загрузка…</div></main>
+</div>
+
+<div id="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h2 id="sheet-title"></h2>
+      <button type="button" class="icon-btn" data-close aria-label="Закрыть">✕</button>
+    </div>
+    <form id="sheet-form" class="sheet-body" autocomplete="off"></form>
+    <div class="sheet-foot" id="sheet-foot"></div>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>
