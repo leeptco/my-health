@@ -2,10 +2,10 @@
 
 // ===================== Константы =====================
 const SYMPTOM_GROUPS = [
-  ['Голова', ['Головная боль', 'Мигрень', 'Головокружение', 'Плохой сон']],
+  ['Голова', ['Головная боль', 'Мигрень', 'Головокружение']],
   ['Горло и ЛОР', ['Болит горло', 'Болят миндалины / пробки', 'Увеличены лимфоузлы', 'Нет голоса', 'Насморк', 'Кашель', 'Болит ухо']],
   ['Живот и таз', ['Болит живот', 'Тошнота', 'Тянет поясницу / низ живота', 'Мочевой пузырь / цистит', 'Тазовая боль', 'Болезненные месячные', 'Мазня / кровянистые выделения']],
-  ['Общее', ['Температура', 'Слабость', 'Озноб', 'Зубы', 'Кожа / аллергия']],
+  ['Общее', ['Температура', 'Слабость', 'Озноб', 'Плохой сон', 'Зубы', 'Кожа / аллергия']],
 ];
 const SYMPTOMS = SYMPTOM_GROUPS.flatMap(g => g[1]);
 const hormTag = (c) => c.is_kok ? `<span class="tag accent">${c.break_days > 0 ? 'КОК' : 'гормоны'}</span>` : '';
@@ -386,8 +386,7 @@ async function diaryForm(row = {}, preset = {}) {
           + (custom.length ? `<div class="small muted" style="margin:6px 0 4px">Другое</div><div class="chips">${custom.map(chip).join('')}</div>` : '');
       })()}</div>
       ${F.text('__custom_sym', 'Другой симптом', '', 'placeholder="Напиши и нажми Enter" data-custom-sym')}
-      <label class="field"><span>Насколько сильно болит / беспокоит: <b id="sev-out">${r.severity ?? 0}</b>/10</span><input type="range" name="severity" min="0" max="10" value="${r.severity ?? 0}" data-range="sev-out"></label>
-      <div class="field-row">${F.number('temperature', 'Температура, °C', r.temperature ?? '', 'step="0.1" min="34" max="43" placeholder="36.6"')}<div></div></div>
+      <div id="temp-box" class="field-row" ${(r.symptoms || []).includes('Температура') || r.temperature ? '' : 'hidden'}>${F.number('temperature', 'Температура, °C', r.temperature ?? '', 'step="0.1" min="34" max="43" placeholder="38.2"')}<div></div></div>
       ${refSelect('episode', r.episode_id, 'Относится к болезни')}
       ${F.area('note', 'Заметка', r.note, 'Что ела, сколько спала, что помогло…')}
     `,
@@ -396,7 +395,7 @@ async function diaryForm(row = {}, preset = {}) {
       const syms = JSON.parse(d.symptoms || '[]');
       if (custom && !syms.includes(custom)) syms.push(custom);
       d.symptoms = syms;
-      if (Number(d.severity) === 0) d.severity = null;
+      if (!syms.includes('Температура')) d.temperature = null; // поле скрыто — значение не сохраняем
       await resolveNew(d);
       await save('diary', { ...d, id: row.id });
       toast('Сохранено'); route();
@@ -429,9 +428,12 @@ async function viewVisits() {
   if (visitsState.spec && !specs.includes(visitsState.spec)) visitsState.spec = null;
   if (visitsState.doc && !docs.some(d => d.id === visitsState.doc)) visitsState.doc = null;
   const all = everything.filter(v => (!visitsState.spec || doctor(v.doctor_id)?.specialty === visitsState.spec) && (!visitsState.doc || v.doctor_id === visitsState.doc));
+  const active = visitsState.doc ? doctor(visitsState.doc)?.name : visitsState.spec;
   const filters = (specs.length > 1 || docs.length > 1) ? `
-    ${specs.length > 1 ? `<div class="chips mb"><span class="chip ${!visitsState.spec ? 'on' : ''}" data-act="visits-spec" data-spec="">Все</span>${specs.map(s => `<span class="chip ${visitsState.spec === s ? 'on' : ''}" data-act="visits-spec" data-spec="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
-    ${docs.length > 1 ? `<div class="chips mb">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">👩‍⚕️ ${esc(d.name)}</span>`).join('')}</div>` : ''}` : '';
+    <details class="mb" ${active ? 'open' : ''}><summary class="small" style="cursor:pointer;color:var(--accent)">${active ? `Фильтр: <b>${esc(active)}</b> · изменить` : 'Отфильтровать по врачу или специальности'}</summary>
+    ${specs.length > 1 ? `<div class="chips mt"><span class="chip ${!visitsState.spec ? 'on' : ''}" data-act="visits-spec" data-spec="">Все</span>${specs.map(s => `<span class="chip ${visitsState.spec === s ? 'on' : ''}" data-act="visits-spec" data-spec="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
+    ${docs.length > 1 ? `<div class="chips mt">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">👩‍⚕️ ${esc(d.name)}</span>`).join('')}</div>` : ''}
+    </details>` : '';
   const upcoming = all.filter(v => v.date > today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   const past = all.filter(v => v.date <= today);
   // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
@@ -466,7 +468,7 @@ async function visitForm(id, preset = {}) {
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
       ${F.area('referrals', 'Направления / что дальше', row.referrals, 'К какому врачу, какие анализы, куда')}
       <div class="field-row">${F.date('next_date', 'Повторный визит', row.next_date)}${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'step="1" min="0"')}</div>
-      ${F.check('dms', 'По ДМС — оплатила страховая (в расходы и вычет не идёт)', row.dms)}
+      ${F.check('dms', 'По ДМС', row.dms)}
       ${F.area('note', 'Заметка', row.note)}
       ${filesBlock(row.files)}
     `,
@@ -632,7 +634,7 @@ async function labForm(id) {
       <button type="button" class="btn small mb" data-add-result>＋ Показатель</button>
       ${indChips.length ? `<div class="small muted">Частые показатели — нажми, чтобы добавить строку:</div><div class="chips mb">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div>` : ''}
       <div class="field-row">${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'min="0"')}<div></div></div>
-      ${F.check('dms', 'По ДМС — оплатила страховая (в расходы и вычет не идёт)', row.dms)}
+      ${F.check('dms', 'По ДМС', row.dms)}
       ${F.area('note', 'Заметка / заключение', row.note, 'Что сказали по результатам')}
       ${filesBlock(row.files, 'Бланк результата (PDF, фото)')}
     `,
@@ -1069,7 +1071,14 @@ sheetForm.addEventListener('click', async (e) => {
   const feel = t.closest('[data-feel]');
   if (feel) { $$('[data-feel]', sheetForm).forEach(b => b.classList.toggle('on', b === feel)); sheetForm.elements.feeling.value = feel.dataset.feel; return; }
   const chip = t.closest('#sym-chips .chip');
-  if (chip) { chip.classList.toggle('on'); sheetForm.elements.symptoms.value = JSON.stringify($$('#sym-chips .chip.on', sheetForm).map(c => c.dataset.sym)); return; }
+  if (chip) {
+    chip.classList.toggle('on');
+    sheetForm.elements.symptoms.value = JSON.stringify($$('#sym-chips .chip.on', sheetForm).map(c => c.dataset.sym));
+    // поле температуры показываем только при выбранном симптоме «Температура»
+    const tb = $('#temp-box', sheetForm);
+    if (tb && chip.dataset.sym === 'Температура') { tb.hidden = !chip.classList.contains('on'); if (!tb.hidden) tb.querySelector('input').focus(); }
+    return;
+  }
   if (t.closest('[data-add-result]')) { $('#results-box', sheetForm).insertAdjacentHTML('beforeend', resultRow()); $('#results-box .res-row:last-child input', sheetForm).focus(); return; }
   const labName = t.closest('[data-lab-name]');
   if (labName) { sheetForm.elements.name.value = labName.dataset.labName; $$('[data-lab-name]', sheetForm).forEach(c => c.classList.toggle('on', c === labName)); renderPrefillHint(sheetForm); return; }
