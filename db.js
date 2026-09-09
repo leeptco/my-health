@@ -85,6 +85,14 @@ CREATE TABLE IF NOT EXISTS files (
   original_name TEXT, mime TEXT, size INTEGER, uploaded_at TEXT DEFAULT (datetime('now')));
 
 CREATE INDEX IF NOT EXISTS diary_date ON diary(date);
+`);
+
+// Миграции: новые колонки для уже существующих баз
+for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0']]) {
+  const cols = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`);
+}
+db.exec(`
 CREATE INDEX IF NOT EXISTS visits_date ON visits(date);
 CREATE INDEX IF NOT EXISTS intakes_date ON intakes(date);
 CREATE INDEX IF NOT EXISTS files_entity ON files(entity_type, entity_id);
@@ -98,12 +106,12 @@ const TABLES = {
   episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'note'], order: 'start_date DESC' },
   diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'],
                  json: ['symptoms'], num: ['feeling', 'severity', 'temperature', 'episode_id'], order: 'date DESC, time DESC, id DESC' },
-  visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'note'],
-                 num: ['doctor_id', 'place_id', 'episode_id', 'cost'], order: 'date DESC, time DESC' },
+  visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'dms', 'note'],
+                 num: ['doctor_id', 'place_id', 'episode_id', 'cost', 'dms'], order: 'date DESC, time DESC' },
   courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                  json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'], order: 'active DESC, start_date DESC' },
   intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], order: 'date DESC' },
-  labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost'], order: 'date DESC' },
+  labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost', 'dms'], order: 'date DESC' },
   lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: 'id' },
   cycles:      { cols: ['start_date', 'end_date', 'flow', 'note'], order: 'start_date DESC' },
   expenses:    { cols: ['date', 'amount', 'category', 'title', 'place_id', 'entity_type', 'entity_id', 'deductible', 'note'],

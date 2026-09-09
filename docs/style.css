@@ -88,6 +88,9 @@ p { margin: 0 0 8px; }
 .list { display: flex; flex-direction: column; gap: 8px; }
 .item { background: var(--card); border-radius: 14px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .item:active { background: #faf9f6; }
+/* подсказка, что карточку можно открыть и править */
+.item[data-act$="-edit"] { position: relative; padding-right: 36px; }
+.item[data-act$="-edit"]::after { content: '✎'; position: absolute; right: 12px; top: 10px; color: var(--muted); opacity: 0.55; font-size: 15px; }
 .item .date-col { min-width: 46px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.2; padding-top: 2px; }
 .item .date-col b { display: block; font-size: 20px; color: var(--text); font-weight: 600; }
 .item .body { flex: 1; min-width: 0; }

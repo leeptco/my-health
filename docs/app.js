@@ -1,12 +1,13 @@
 'use strict';
 
 // ===================== Константы =====================
-const SYMPTOMS = [
-  'Головная боль', 'Мигрень', 'Болит горло', 'Нет голоса', 'Насморк', 'Кашель', 'Температура',
-  'Болит живот', 'Тянет поясницу / низ живота', 'Мочевой пузырь / цистит', 'Тошнота', 'Слабость',
-  'Головокружение', 'Зубы', 'Плохой сон', 'Кожа / аллергия',
-  'Тазовая боль', 'Болезненные месячные', 'Мазня / кровянистые выделения',
+const SYMPTOM_GROUPS = [
+  ['Голова', ['Головная боль', 'Мигрень', 'Головокружение', 'Плохой сон']],
+  ['Горло и ЛОР', ['Болит горло', 'Болят миндалины / пробки', 'Увеличены лимфоузлы', 'Нет голоса', 'Насморк', 'Кашель', 'Болит ухо']],
+  ['Живот и таз', ['Болит живот', 'Тошнота', 'Тянет поясницу / низ живота', 'Мочевой пузырь / цистит', 'Тазовая боль', 'Болезненные месячные', 'Мазня / кровянистые выделения']],
+  ['Общее', ['Температура', 'Слабость', 'Озноб', 'Зубы', 'Кожа / аллергия']],
 ];
+const SYMPTOMS = SYMPTOM_GROUPS.flatMap(g => g[1]);
 const hormTag = (c) => c.is_kok ? `<span class="tag accent">${c.break_days > 0 ? 'КОК' : 'гормоны'}</span>` : '';
 const FEELINGS = { 1: ['😣', 'Очень плохо'], 2: ['😕', 'Плохо'], 3: ['😐', 'Так себе'], 4: ['🙂', 'Хорошо'], 5: ['😄', 'Отлично'] };
 const MED_FORMS = ['Таблетки', 'Капсулы', 'Суспензия', 'Сироп', 'Порошок / саше', 'Капли', 'Спрей', 'Свечи', 'Мазь / крем / гель', 'Раствор', 'Инъекции', 'Пластырь', 'Ингаляции', 'Другое'];
@@ -378,7 +379,12 @@ async function diaryForm(row = {}, preset = {}) {
       <div class="field-row">${F.date('date', 'Дата', r.date, 'required')}${F.time('time', 'Время', r.time || '')}</div>
       <div class="field-label">Что беспокоит</div>
       ${F.hidden('symptoms', JSON.stringify(r.symptoms || []))}
-      <div class="chips mb" id="sym-chips">${[...new Set([...SYMPTOMS, ...(r.symptoms || [])])].map(s => `<span class="chip ${(r.symptoms || []).includes(s) ? 'on' : ''}" data-sym="${esc(s)}">${esc(s)}</span>`).join('')}</div>
+      <div id="sym-chips" class="mb">${(() => {
+        const chip = (s) => `<span class="chip ${(r.symptoms || []).includes(s) ? 'on' : ''}" data-sym="${esc(s)}">${esc(s)}</span>`;
+        const custom = (r.symptoms || []).filter(s => !SYMPTOMS.includes(s));
+        return SYMPTOM_GROUPS.map(([g, list]) => `<div class="small muted" style="margin:6px 0 4px">${g}</div><div class="chips">${list.map(chip).join('')}</div>`).join('')
+          + (custom.length ? `<div class="small muted" style="margin:6px 0 4px">Другое</div><div class="chips">${custom.map(chip).join('')}</div>` : '');
+      })()}</div>
       ${F.text('__custom_sym', 'Другой симптом', '', 'placeholder="Напиши и нажми Enter" data-custom-sym')}
       <label class="field"><span>Насколько сильно болит / беспокоит: <b id="sev-out">${r.severity ?? 0}</b>/10</span><input type="range" name="severity" min="0" max="10" value="${r.severity ?? 0}" data-range="sev-out"></label>
       <div class="field-row">${F.number('temperature', 'Температура, °C', r.temperature ?? '', 'step="0.1" min="34" max="43" placeholder="36.6"')}<div></div></div>
@@ -411,12 +417,21 @@ function visitItem(v, today = todayStr()) {
       ${future && v.reason ? `<div class="meta">${esc(v.reason)}</div>` : ''}
       ${v.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
       ${v.conclusion ? `<div class="meta ellipsis">${esc(v.conclusion)}</div>` : ''}
-      <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.cost ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">🤒 ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
+      <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.dms ? '<span class="tag accent">ДМС</span>' : ''}${v.cost && !v.dms ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">🤒 ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
     </div></div>`;
 }
+const visitsState = { spec: null, doc: null };
 async function viewVisits() {
-  const all = await GET('/api/visits');
+  const everything = await GET('/api/visits');
   const today = todayStr();
+  const specs = [...new Set(everything.map(v => doctor(v.doctor_id)?.specialty).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+  const docs = [...new Set(everything.map(v => v.doctor_id).filter(Boolean))].map(doctor).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  if (visitsState.spec && !specs.includes(visitsState.spec)) visitsState.spec = null;
+  if (visitsState.doc && !docs.some(d => d.id === visitsState.doc)) visitsState.doc = null;
+  const all = everything.filter(v => (!visitsState.spec || doctor(v.doctor_id)?.specialty === visitsState.spec) && (!visitsState.doc || v.doctor_id === visitsState.doc));
+  const filters = (specs.length > 1 || docs.length > 1) ? `
+    ${specs.length > 1 ? `<div class="chips mb"><span class="chip ${!visitsState.spec ? 'on' : ''}" data-act="visits-spec" data-spec="">Все</span>${specs.map(s => `<span class="chip ${visitsState.spec === s ? 'on' : ''}" data-act="visits-spec" data-spec="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
+    ${docs.length > 1 ? `<div class="chips mb">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">👩‍⚕️ ${esc(d.name)}</span>`).join('')}</div>` : ''}` : '';
   const upcoming = all.filter(v => v.date > today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   const past = all.filter(v => v.date <= today);
   // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
@@ -426,7 +441,8 @@ async function viewVisits() {
       <div class="body"><div class="title muted">Повторный визит: ${d ? esc(d.name) : 'врач'}${d?.specialty ? ` · ${esc(d.specialty)}` : ''}</div>
       <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
   render(`
-    ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит'))}
+    ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит') + ' <a class="btn small" href="#refs">Врачи и места</a>')}
+    ${filters}
     <div class="group-label">Предстоящие</div>
     <div class="list">${upcoming.length || planned.length ? upcoming.map(v => visitItem(v, today)).join('') + plannedHtml : '<div class="empty">Ничего не запланировано. Чтобы записаться — нажми ＋ и поставь будущую дату.</div>'}</div>
     <div class="group-label">Прошедшие</div>
@@ -436,7 +452,7 @@ async function viewVisits() {
   `);
 }
 async function visitForm(id, preset = {}) {
-  const row = id ? await loadFull('visits', id) : { date: todayStr(), time: '', doctor_id: ls.get('last_doctor'), place_id: ls.get('last_place'), ...preset };
+  const row = id ? await loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset };
   openSheet({
     title: id ? (row.date > todayStr() ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
     body: `
@@ -450,6 +466,7 @@ async function visitForm(id, preset = {}) {
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
       ${F.area('referrals', 'Направления / что дальше', row.referrals, 'К какому врачу, какие анализы, куда')}
       <div class="field-row">${F.date('next_date', 'Повторный визит', row.next_date)}${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'step="1" min="0"')}</div>
+      ${F.check('dms', 'По ДМС — оплатила страховая (в расходы и вычет не идёт)', row.dms)}
       ${F.area('note', 'Заметка', row.note)}
       ${filesBlock(row.files)}
     `,
@@ -457,7 +474,6 @@ async function visitForm(id, preset = {}) {
       await resolveNew(d);
       const saved = await save('visits', { ...d, id });
       await uploadFiles(form, 'visits', saved.id);
-      if (d.doctor_id) ls.set('last_doctor', d.doctor_id);
       if (d.place_id) ls.set('last_place', d.place_id);
       toast('Сохранено'); route();
     },
@@ -499,7 +515,7 @@ function timesInputs(n, times = []) {
   return `<div class="field-label">Время приёма</div><div class="row wrap mb">${Array.from({ length: n }, (_, i) => `<input type="time" name="times[]" value="${esc(times[i] || def[i] || '')}" style="width:auto;flex:1;min-width:100px">`).join('')}</div>`;
 }
 async function courseForm(id, preset = {}) {
-  const row = id ? await loadFull('courses', id) : { start_date: todayStr(), per_day: 1, times: DEFAULT_TIMES[1], active: 1, doctor_id: ls.get('last_doctor'), ...preset };
+  const row = id ? await loadFull('courses', id) : { start_date: todayStr(), per_day: 1, times: DEFAULT_TIMES[1], active: 1, ...preset };
   const isKok = !!row.is_kok;
   openSheet({
     title: id ? 'Курс приёма' : 'Новый курс',
@@ -527,7 +543,6 @@ async function courseForm(id, preset = {}) {
       if (!id) d.active = 1;
       if (!d.is_kok) { d.pack_size = null; d.break_days = null; }
       await save('courses', { ...d, id });
-      if (d.doctor_id) ls.set('last_doctor', d.doctor_id);
       toast('Сохранено'); route();
     },
     onDelete: id ? async () => { await DEL(`/api/courses/${id}`); toast('Удалено'); route(); } : null,
@@ -535,13 +550,26 @@ async function courseForm(id, preset = {}) {
 }
 
 // ---------- Анализы ----------
-const labsState = { mode: 'list', indicator: null, names: [] };
+const labsState = { mode: 'list', indicator: null, names: [], prev: [], prevResults: [] };
+// подсказки в форме анализа: прошлые названия и показатели, чтобы не печатать заново
+const topLabNames = () => { const c = {}; for (const l of labsState.prev) c[l.name] = (c[l.name] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).map(x => x[0]).filter(n => !LAB_NAMES.includes(n)).concat(LAB_NAMES.filter(n => c[n])).slice(0, 10); };
+function prevResultsFor(name) {
+  const same = labsState.prev.filter(l => l.name.trim().toLowerCase() === String(name).trim().toLowerCase()).sort((a, b) => b.date.localeCompare(a.date));
+  if (!same.length) return null;
+  const rs = labsState.prevResults.filter(r => r.lab_id === same[0].id);
+  return rs.length ? { lab: same[0], results: rs } : null;
+}
+function renderPrefillHint(form) {
+  const name = form.elements.name.value; const box = $('#prefill-box', form); if (!box) return;
+  const p = prevResultsFor(name);
+  box.innerHTML = p ? `<button type="button" class="btn small" data-prefill-lab>Подставить показатели из «${esc(p.lab.name)}» от ${fmtDate(p.lab.date)} (${p.results.length})</button>` : '';
+}
 function labItem(l) {
   const p = place(l.place_id);
   return `<div class="item" data-act="lab-edit" data-id="${l.id}">${dateCol(l.date)}
     <div class="body"><div class="title">${esc(l.name)}</div>
       ${p ? `<div class="sub">📍 ${esc(p.name)}</div>` : ''}
-      <div>${l.results_n ? `<span class="tag">${plural(l.results_n, 'показатель', 'показателя', 'показателей')}</span>` : ''}${l.out_n ? `<span class="tag danger">${l.out_n} вне нормы</span>` : ''}${l.files_n ? `<span class="tag">📎 ${l.files_n}</span>` : ''}${l.cost ? `<span class="tag">${money(l.cost)}</span>` : ''}${l.episode_id && episode(l.episode_id) ? `<span class="tag">🤒 ${esc(episode(l.episode_id).title)}</span>` : ''}</div>
+      <div>${l.results_n ? `<span class="tag">${plural(l.results_n, 'показатель', 'показателя', 'показателей')}</span>` : ''}${l.out_n ? `<span class="tag danger">${l.out_n} вне нормы</span>` : ''}${l.files_n ? `<span class="tag">📎 ${l.files_n}</span>` : ''}${l.dms ? '<span class="tag accent">ДМС</span>' : ''}${l.cost && !l.dms ? `<span class="tag">${money(l.cost)}</span>` : ''}${l.episode_id && episode(l.episode_id) ? `<span class="tag">🤒 ${esc(episode(l.episode_id).title)}</span>` : ''}</div>
       ${l.note ? `<div class="meta ellipsis">${esc(l.note)}</div>` : ''}
     </div></div>`;
 }
@@ -585,20 +613,26 @@ function resultRow(r = {}) {
     <button type="button" class="icon-btn" data-del-result>✕</button></div>`;
 }
 async function labForm(id) {
-  const [row, names] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [] }, GET('/api/labs/indicator-names')]);
-  labsState.names = names;
+  const [row, names, prev, prevResults] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [] }, GET('/api/labs/indicator-names'), GET('/api/labs'), GET('/api/lab_results')]);
+  labsState.names = names; labsState.prev = prev.filter(l => l.id !== Number(id)); labsState.prevResults = prevResults;
+  const nameChips = topLabNames();
+  const indChips = names.slice(0, 16);
   openSheet({
     title: id ? 'Анализ / обследование' : 'Новый анализ',
     body: `
       ${F.datalist('lab-names', LAB_NAMES)}${F.datalist('indicator-names', names.map(n => n.indicator))}
-      <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.text('name', 'Что сдавала', row.name, 'list="lab-names" required placeholder="Общий анализ мочи"')}</div>
+      <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.text('name', 'Что сдавала', row.name, 'list="lab-names" required placeholder="Общий анализ мочи" data-lab-name-input')}</div>
+      ${nameChips.length ? `<div class="chips mb">${nameChips.map(n => `<span class="chip" data-lab-name="${esc(n)}">${esc(n)}</span>`).join('')}</div>` : ''}
+      <div id="prefill-box" class="mb"></div>
       ${refSelect('place', row.place_id, 'Где (лаборатория, клиника)')}
       ${refSelect('doctor', row.doctor_id, 'Кто направил')}
       ${refSelect('episode', row.episode_id, 'Относится к болезни')}
       <div class="field-label">Показатели <span class="muted">(на телефоне: показатель и значение; норму можно заполнить с ноутбука)</span></div>
       <div id="results-box">${(row.results || []).map(resultRow).join('')}</div>
       <button type="button" class="btn small mb" data-add-result>＋ Показатель</button>
+      ${indChips.length ? `<div class="small muted">Частые показатели — нажми, чтобы добавить строку:</div><div class="chips mb">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div>` : ''}
       <div class="field-row">${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'min="0"')}<div></div></div>
+      ${F.check('dms', 'По ДМС — оплатила страховая (в расходы и вычет не идёт)', row.dms)}
       ${F.area('note', 'Заметка / заключение', row.note, 'Что сказали по результатам')}
       ${filesBlock(row.files, 'Бланк результата (PDF, фото)')}
     `,
@@ -781,7 +815,7 @@ async function viewRefs(params) {
   else if (refsState.tab === 'places') list = refs.places.map(p => `<div class="item" data-act="place-edit" data-id="${p.id}"><div class="feel">📍</div><div class="body"><div class="title">${esc(p.name)}</div><div class="sub">${esc(p.type || '')}${p.address ? ' · ' + esc(p.address) : ''}</div><div class="meta">${p.address ? `<a href="https://yandex.ru/maps/?text=${encodeURIComponent(p.address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Открыть на карте</a>` : ''}${p.phone ? ` · <a href="tel:${esc(p.phone)}" onclick="event.stopPropagation()">${esc(p.phone)}</a>` : ''}</div></div></div>`);
   else list = refs.medications.map(m => `<div class="item" data-act="med-edit" data-id="${m.id}"><div class="feel">💊</div><div class="body"><div class="title">${esc(m.name)} ${m.strength ? `<span class="muted">${esc(m.strength)}</span>` : ''}</div><div class="sub">${esc(m.form || '')}</div>${m.note ? `<div class="meta">${esc(m.note)}</div>` : ''}</div></div>`);
   const addAct = { doctors: 'doctor-new', places: 'place-new', medications: 'med-new' }[refsState.tab];
-  render(`${pageHead('Справочники', 'врачи, клиники и препараты — чтобы не вводить заново', addBtn(addAct, 'Добавить'))}${seg}<div class="list">${list.length ? list.join('') : '<div class="empty">Пока пусто. Записи появятся автоматически, когда добавишь визит или лекарство.</div>'}</div>${fab(addAct)}`);
+  render(`${pageHead('Справочники', 'нажми на карточку, чтобы исправить ФИО, адрес или удалить', addBtn(addAct, 'Добавить'))}${seg}<div class="list">${list.length ? list.join('') : '<div class="empty">Пока пусто. Записи появятся автоматически, когда добавишь визит или лекарство.</div>'}</div>${fab(addAct)}`);
 }
 async function doctorForm(id) {
   const row = id ? doctor(id) : {};
@@ -874,7 +908,10 @@ async function viewExportLocal() {
         <button class="btn primary" data-act="backup" data-files="1">Сохранить копию</button>
         <button class="btn" data-act="backup" data-files="0">Только данные, без файлов</button>
         <label class="btn">Восстановить из файла<input type="file" accept=".json,application/json" id="import-file" hidden></label></div>
-      <p class="small muted mt">«Сохранить копию» — полный архив с прикреплёнными PDF и фото (на телефоне откроется меню «Поделиться» — отправь в «Файлы», iCloud или себе в мессенджер). «Только данные» — лёгкий файл без вложений.</p></div>
+      <p class="small muted mt">«Сохранить копию» — полный архив с прикреплёнными PDF и фото (на телефоне откроется меню «Поделиться» — отправь в «Файлы», iCloud или себе в мессенджер). «Только данные» — лёгкий файл без вложений.</p>
+      <details class="mt"><summary class="small muted" style="cursor:pointer">Начать с чистого листа</summary>
+        <p class="small mt">Удаляет все записи и файлы на этом устройстве (например, тестовые). Сначала сохрани копию, если что-то из этого ещё нужно.</p>
+        <button class="btn danger small" data-act="wipe">Удалить все данные</button></details></div>
     ${appleHealthCard()}
     <div class="card"><div class="card-title"><h2>💻 Телефон и ноутбук</h2></div>
       <p class="small">На ноутбуке открой ту же ссылку — там будет своя, отдельная база. Чтобы перенести данные: на телефоне «Сохранить копию» → файл на ноутбук (iCloud, Telegram, почта) → на ноутбуке «Восстановить из файла». И в обратную сторону так же. Автоматической синхронизации в этом режиме нет — актуальной считай ту копию, где записывала последней.</p></div>
@@ -971,6 +1008,13 @@ const actions = {
   'diary-edit': async (d) => diaryForm(await GET(`/api/diary/${d.id}`)),
   'filter-sym': (d) => { diaryState.filter = d.sym || null; viewDiary(); },
   'visit-new': () => visitForm(), 'visit-edit': (d) => visitForm(d.id),
+  'visits-spec': (d) => { visitsState.spec = d.spec || null; visitsState.doc = null; viewVisits(); },
+  'visits-doc': (d) => { visitsState.doc = visitsState.doc === Number(d.id) ? null : Number(d.id); viewVisits(); },
+  'wipe': async () => {
+    if (!confirm('Удалить ВСЕ данные на этом устройстве? Это нельзя отменить.')) return;
+    if (prompt('Для подтверждения напиши слово УДАЛИТЬ') !== 'УДАЛИТЬ') return toast('Отменено');
+    await window.localApi.importData({ tables: {} }); await loadRefs(); toast('Все данные удалены'); location.hash = '#today'; route();
+  },
   'visit-plan': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: v.next_date, doctor_id: v.doctor_id, place_id: v.place_id, episode_id: v.episode_id, reason: 'Повторный визит' }); },
   'course-new': (d) => courseForm(null, d.kok ? { is_kok: 1, pack_size: 28, break_days: 0 } : {}),
   'course-edit': (d) => courseForm(d.id),
@@ -1027,6 +1071,24 @@ sheetForm.addEventListener('click', async (e) => {
   const chip = t.closest('#sym-chips .chip');
   if (chip) { chip.classList.toggle('on'); sheetForm.elements.symptoms.value = JSON.stringify($$('#sym-chips .chip.on', sheetForm).map(c => c.dataset.sym)); return; }
   if (t.closest('[data-add-result]')) { $('#results-box', sheetForm).insertAdjacentHTML('beforeend', resultRow()); $('#results-box .res-row:last-child input', sheetForm).focus(); return; }
+  const labName = t.closest('[data-lab-name]');
+  if (labName) { sheetForm.elements.name.value = labName.dataset.labName; $$('[data-lab-name]', sheetForm).forEach(c => c.classList.toggle('on', c === labName)); renderPrefillHint(sheetForm); return; }
+  if (t.closest('[data-prefill-lab]')) {
+    const p = prevResultsFor(sheetForm.elements.name.value); if (!p) return;
+    const box = $('#results-box', sheetForm);
+    const have = new Set($$('.res-row input[name="r_indicator[]"]', box).map(i => i.value.trim().toLowerCase()).filter(Boolean));
+    for (const r of p.results) if (!have.has(r.indicator.toLowerCase())) box.insertAdjacentHTML('beforeend', resultRow({ indicator: r.indicator, unit: r.unit, ref_min: r.ref_min, ref_max: r.ref_max }));
+    $$('.res-row', box).filter(row => !$$('input', row).some(i => i.value.trim())).forEach(row => row.remove());
+    toast(`Добавлено показателей: ${p.results.length}. Осталось вписать значения`); return;
+  }
+  const indChip = t.closest('[data-ind-chip]');
+  if (indChip) {
+    const name = indChip.dataset.indChip, box = $('#results-box', sheetForm);
+    if ($$('.res-row input[name="r_indicator[]"]', box).some(i => i.value.trim().toLowerCase() === name.toLowerCase())) return toast('Уже в списке');
+    const known = labsState.names.find(n => n.indicator === name) || {};
+    box.insertAdjacentHTML('beforeend', resultRow({ indicator: name, unit: known.unit, ref_min: known.ref_min, ref_max: known.ref_max }));
+    $('#results-box .res-row:last-child input[name="r_value[]"]', sheetForm).focus(); return;
+  }
   if (t.closest('[data-del-result]')) { t.closest('.res-row').remove(); return; }
   const setToday = t.closest('[data-set-today]');
   if (setToday) { sheetForm.elements[setToday.dataset.setToday].value = todayStr(); return; }
@@ -1047,6 +1109,7 @@ sheetForm.addEventListener('change', (e) => {
 sheetForm.addEventListener('input', (e) => {
   const el = e.target;
   if (el.dataset.range) $('#' + el.dataset.range, sheetForm).textContent = el.value;
+  if (el.dataset.labNameInput !== undefined) renderPrefillHint(sheetForm);
 });
 sheetForm.addEventListener('keydown', (e) => {
   const el = e.target;
@@ -1054,7 +1117,11 @@ sheetForm.addEventListener('keydown', (e) => {
     e.preventDefault();
     const v = el.value.trim(); if (!v) return;
     const chips = $('#sym-chips', sheetForm);
-    if (!$$('.chip', chips).some(c => c.dataset.sym === v)) chips.insertAdjacentHTML('beforeend', `<span class="chip on" data-sym="${esc(v)}">${esc(v)}</span>`);
+    if (!$$('.chip', chips).some(c => c.dataset.sym === v)) {
+      let box = chips.querySelector('.chips:last-child');
+      if (!box || !chips.querySelector('[data-custom-box]')) { chips.insertAdjacentHTML('beforeend', '<div class="small muted" style="margin:6px 0 4px">Другое</div><div class="chips" data-custom-box></div>'); box = chips.querySelector('[data-custom-box]'); }
+      box.insertAdjacentHTML('beforeend', `<span class="chip on" data-sym="${esc(v)}">${esc(v)}</span>`);
+    }
     else $$('.chip', chips).find(c => c.dataset.sym === v).classList.add('on');
     sheetForm.elements.symptoms.value = JSON.stringify($$('#sym-chips .chip.on', sheetForm).map(c => c.dataset.sym));
     el.value = '';

@@ -103,11 +103,11 @@ function afterSave(table, row, body) {
   if (table === 'visits') {
     const doc = row.doctor_id ? get('doctors', row.doctor_id) : null;
     const who = doc ? `${doc.name}${doc.specialty ? ' (' + doc.specialty + ')' : ''}` : 'врач';
-    syncExpense('visits', row.id, row.cost, row.date, doc?.specialty === 'Стоматолог' ? 'Стоматология' : 'Врач', 'Визит: ' + who, row.place_id);
+    syncExpense('visits', row.id, row.dms ? 0 : row.cost, row.date, doc?.specialty === 'Стоматолог' ? 'Стоматология' : 'Врач', 'Визит: ' + who, row.place_id);
     syncReminder('visits', row.id, row.next_date, 'Повторный визит: ' + who, 'visit');
   }
   if (table === 'labs') {
-    syncExpense('labs', row.id, row.cost, row.date, 'Анализы', row.name, row.place_id);
+    syncExpense('labs', row.id, row.dms ? 0 : row.cost, row.date, 'Анализы', row.name, row.place_id);
     if (Array.isArray(body.results)) {
       run('DELETE FROM lab_results WHERE lab_id = ?', [row.id]);
       for (const r of body.results) {

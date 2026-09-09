@@ -13,13 +13,13 @@
     episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'note'], order: [['start_date', -1]] },
     diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'], json: ['symptoms'],
                    num: ['feeling', 'severity', 'temperature', 'episode_id'], order: [['date', -1], ['time', -1], ['id', -1]] },
-    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'note'],
-                   num: ['doctor_id', 'place_id', 'episode_id', 'cost'], order: [['date', -1], ['time', -1]] },
+    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'dms', 'note'],
+                   num: ['doctor_id', 'place_id', 'episode_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1], ['time', -1]] },
     courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                    json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'],
                    defaults: { per_day: 1, is_kok: 0, active: 1 }, order: [['active', -1], ['start_date', -1]] },
     intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], defaults: { slot: 0, taken: 1 }, order: [['date', -1]] },
-    labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost'], order: [['date', -1]] },
+    labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1]] },
     lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: [['id', 1]] },
     cycles:      { cols: ['start_date', 'end_date', 'flow', 'note'], order: [['start_date', -1]] },
     expenses:    { cols: ['date', 'amount', 'category', 'title', 'place_id', 'entity_type', 'entity_id', 'deductible', 'note'],
@@ -140,11 +140,12 @@
     if (t === 'visits') {
       const doc = row.doctor_id ? get('doctors', row.doctor_id) : null;
       const who = doc ? `${doc.name}${doc.specialty ? ' (' + doc.specialty + ')' : ''}` : 'врач';
-      syncExpense('visits', row.id, row.cost, row.date, doc?.specialty === 'Стоматолог' ? 'Стоматология' : 'Врач', 'Визит: ' + who, row.place_id);
+      // по ДМС платит страховая — в расходы не попадает
+      syncExpense('visits', row.id, row.dms ? 0 : row.cost, row.date, doc?.specialty === 'Стоматолог' ? 'Стоматология' : 'Врач', 'Визит: ' + who, row.place_id);
       syncReminder('visits', row.id, row.next_date, 'Повторный визит: ' + who, 'visit');
     }
     if (t === 'labs') {
-      syncExpense('labs', row.id, row.cost, row.date, 'Анализы', row.name, row.place_id);
+      syncExpense('labs', row.id, row.dms ? 0 : row.cost, row.date, 'Анализы', row.name, row.place_id);
       if (Array.isArray(body.results)) {
         S.tables.lab_results = rows('lab_results').filter(r => r.lab_id !== row.id);
         for (const r of body.results) { if (!r.indicator || !String(r.indicator).trim()) continue; insert('lab_results', { ...r, lab_id: row.id, indicator: String(r.indicator).trim() }); }
@@ -159,7 +160,8 @@
   function beforeDelete(t, id) {
     const refs = { doctors: [['visits', 'doctor_id'], ['courses', 'doctor_id'], ['labs', 'doctor_id']], places: [['visits', 'place_id'], ['labs', 'place_id'], ['doctors', 'place_id']], medications: [['courses', 'medication_id']] }[t];
     if (!refs) return;
-    for (const [tt, col] of refs) { const n = rows(tt).filter(r => r[col] === Number(id)).length; if (n) fail(`Нельзя удалить: используется в записях (${tt}: ${n})`, 409); }
+    const RU = { visits: 'визитах', courses: 'курсах лекарств', labs: 'анализах', doctors: 'карточках врачей' };
+    for (const [tt, col] of refs) { const n = rows(tt).filter(r => r[col] === Number(id)).length; if (n) fail(`Нельзя удалить: используется в ${n} ${RU[tt] || tt}. Сначала измени или удали эти записи.`, 409); }
   }
   async function afterDelete(t, id) {
     id = Number(id);
