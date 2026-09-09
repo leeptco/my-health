@@ -1,6 +1,6 @@
 // Service worker: кэширует оболочку приложения, чтобы оно открывалось без интернета.
 // Стратегия: отдаём из кэша сразу, в фоне обновляем из сети — новая версия подхватится при следующем запуске.
-const VERSION = 'health-v1';
+const VERSION = 'health-v2';
 const SHELL = ['./', './index.html', './app.js', './localapi.js', './style.css', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -273,7 +273,11 @@ const addBtn = (act, label) => `<button class="btn primary small desk-only" data
 
 // ---------- Сегодня ----------
 async function viewToday() {
-  const t = await GET('/api/today?date=' + todayStr());
+  const [t, upcomingVisits] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`)]);
+  const upcoming = upcomingVisits.filter(v => v.date > todayStr() || !v.conclusion).sort((a, b) => a.date.localeCompare(b.date));
+  const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>🩺 Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
+      ${upcoming.map(v => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="pill-row" data-act="visit-edit" data-id="${v.id}" style="cursor:pointer"><div class="info"><div class="name">${d ? esc(d.name) : 'Врач'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
+        <div class="dose">${fmtDate(v.date)}${v.time ? ' в ' + v.time : ''} · ${untilLabel(v.date, t.date)}${p ? ' · 📍 ' + esc(p.name) : ''}</div></div><span class="muted">›</span></div>`; }).join('')}</div>` : '';
   const feelRow = Object.entries(FEELINGS).map(([v, [e, l]]) => `<button class="feel-btn" data-act="diary-new" data-feeling="${v}" title="${l}">${e}<small>${l}</small></button>`).join('');
 
   const pills = t.courses.length ? t.courses.map(c => `
@@ -323,6 +327,7 @@ async function viewToday() {
     ${pageHead('Сегодня', fmtDateLong(t.date))}
     ${backupCard}
     <div class="card"><h3>Как самочувствие?</h3><div class="feel-picker" style="margin:0">${feelRow}</div></div>
+    ${visitsCard}
     <div class="card"><div class="card-title"><h2>💊 Лекарства сегодня</h2><a href="#meds" class="small">Все →</a></div>${pills}</div>
     ${kokCard}
     <div class="card"><div class="card-title"><h2>🔔 Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
@@ -395,12 +400,15 @@ async function diaryForm(row = {}, preset = {}) {
 }
 
 // ---------- Визиты ----------
-function visitItem(v) {
+const untilLabel = (date, today) => { const n = daysBetween(today, date); return n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${plural(n, 'день', 'дня', 'дней')}`; };
+function visitItem(v, today = todayStr()) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
+  const future = v.date > today || (v.date === today && !v.conclusion);
   return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}
     <div class="body">
-      <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
-      ${p ? `<div class="sub">📍 ${esc(p.name)}</div>` : ''}
+      <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${future && v.date >= today ? ` <span class="tag accent">${untilLabel(v.date, today)}${v.time ? ' · ' + v.time : ''}</span>` : ''}</div>
+      ${p ? `<div class="sub">📍 ${esc(p.name)}${p.address ? ', ' + esc(p.address) : ''}</div>` : ''}
+      ${future && v.reason ? `<div class="meta">${esc(v.reason)}</div>` : ''}
       ${v.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
       ${v.conclusion ? `<div class="meta ellipsis">${esc(v.conclusion)}</div>` : ''}
       <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.cost ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">🤒 ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
@@ -408,19 +416,31 @@ function visitItem(v) {
 }
 async function viewVisits() {
   const all = await GET('/api/visits');
-  const groups = groupBy(all, v => v.date.slice(0, 4));
+  const today = todayStr();
+  const upcoming = all.filter(v => v.date > today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  const past = all.filter(v => v.date <= today);
+  // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
+  const planned = past.filter(v => v.next_date && v.next_date >= today && !all.some(x => x.date === v.next_date && x.doctor_id === v.doctor_id));
+  const groups = groupBy(past, v => v.date.slice(0, 4));
+  const plannedHtml = planned.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-plan" data-id="${v.id}" style="border:1px dashed var(--line);box-shadow:none;background:transparent">${dateCol(v.next_date)}
+      <div class="body"><div class="title muted">Повторный визит: ${d ? esc(d.name) : 'врач'}${d?.specialty ? ` · ${esc(d.specialty)}` : ''}</div>
+      <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
   render(`
     ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит'))}
-    ${all.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label">${y}</div><div class="list">${list.map(visitItem).join('')}</div>`).join('')
+    <div class="group-label">Предстоящие</div>
+    <div class="list">${upcoming.length || planned.length ? upcoming.map(v => visitItem(v, today)).join('') + plannedHtml : '<div class="empty">Ничего не запланировано. Чтобы записаться — нажми ＋ и поставь будущую дату.</div>'}</div>
+    <div class="group-label">Прошедшие</div>
+    ${past.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label small" style="margin-top:6px">${y}</div><div class="list">${list.map(v => visitItem(v, today)).join('')}</div>`).join('')
       : '<div class="empty">Визитов пока нет. Нажми ＋ и запиши, что сказал врач.</div>'}
     ${fab('visit-new')}
   `);
 }
-async function visitForm(id) {
-  const row = id ? await loadFull('visits', id) : { date: todayStr(), time: '', doctor_id: ls.get('last_doctor'), place_id: ls.get('last_place') };
+async function visitForm(id, preset = {}) {
+  const row = id ? await loadFull('visits', id) : { date: todayStr(), time: '', doctor_id: ls.get('last_doctor'), place_id: ls.get('last_place'), ...preset };
   openSheet({
-    title: id ? 'Визит' : 'Новый визит',
+    title: id ? (row.date > todayStr() ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
     body: `
+      <p class="small muted">Будущая дата — это запись к врачу, она попадёт в «Предстоящие» и на главную. После приёма открой её и допиши, что сказал врач.</p>
       <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.time('time', 'Время', row.time || '')}</div>
       ${refSelect('doctor', row.doctor_id, 'Врач')}
       ${refSelect('place', row.place_id, 'Где')}
@@ -830,10 +850,10 @@ function bindImportHandlers() {
     e.target.value = '';
   };
 }
-const appleHealthCard = () => `<div class="card"><div class="card-title"><h2>🌙 Цикл из Apple Health / Flo</h2></div>
-      <p class="small">Прямого API у Flo и «Здоровья» нет, но данные можно перенести файлом. В Flo включи синхронизацию с Apple Health (Flo → Настройки → Apple Health). Затем на iPhone: <b>Здоровье → фото профиля → Экспортировать медданные</b> → сохрани ZIP в «Файлы», нажми на него — распакуется папка, внутри <code>export.xml</code>. Выбери его здесь: подтянутся дни месячных (как циклы) и межменструальные кровотечения (как записи «Мазня» в дневнике). Повторный импорт ничего не задублирует.</p>
-      <label class="btn primary">Загрузить export.xml<input type="file" accept=".xml,text/xml,application/xml" id="health-import" hidden></label>
-      <p class="small muted mt" id="health-import-status"></p></div>`;
+const appleHealthCard = () => `<details class="card"><summary class="muted small" style="cursor:pointer">Дополнительно: импорт цикла из приложения «Здоровье» (export.xml)</summary>
+      <p class="small mt">Здоровье → фото профиля → <b>Экспортировать все медданные</b> → сохранить ZIP в «Файлы» → нажать на него (распакуется) → выбрать здесь <code>export.xml</code>. Подтянутся дни месячных (как циклы) и межменструальные кровотечения (как «Мазня» в дневнике). Повторный импорт не дублирует. Если проще вести вручную — кнопка «Начались сегодня» в разделе «Цикл» делает то же самое.</p>
+      <label class="btn">Загрузить export.xml<input type="file" accept=".xml,text/xml,application/xml" id="health-import" hidden></label>
+      <p class="small muted mt" id="health-import-status"></p></details>`;
 const reportCard = () => `<div class="card"><div class="card-title"><h2>📄 Отчёт для врача</h2></div>
       <p class="muted small">Одна страница: самочувствие, визиты, лекарства и анализы за период. Можно распечатать или сохранить в PDF (на iPhone — Поделиться → Напечатать → PDF).</p>
       <div class="field-row">${F.date('__from', 'С', addDays(todayStr(), -90))}${F.date('__to', 'По', todayStr())}</div>
@@ -951,6 +971,7 @@ const actions = {
   'diary-edit': async (d) => diaryForm(await GET(`/api/diary/${d.id}`)),
   'filter-sym': (d) => { diaryState.filter = d.sym || null; viewDiary(); },
   'visit-new': () => visitForm(), 'visit-edit': (d) => visitForm(d.id),
+  'visit-plan': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: v.next_date, doctor_id: v.doctor_id, place_id: v.place_id, episode_id: v.episode_id, reason: 'Повторный визит' }); },
   'course-new': (d) => courseForm(null, d.kok ? { is_kok: 1, pack_size: 28, break_days: 0 } : {}),
   'course-edit': (d) => courseForm(d.id),
   'toggle-intake': async (d, el) => { const r = await POST('/api/intakes/toggle', { course_id: Number(d.course), date: todayStr(), slot: Number(d.slot) }); el.classList.toggle('on', r.taken); el.textContent = (r.taken ? '✓ ' : '') + el.textContent.replace('✓ ', ''); },
