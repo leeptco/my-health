@@ -147,6 +147,7 @@ function afterDelete(table, id) {
   }
   if (table === 'courses') run('DELETE FROM intakes WHERE course_id = ?', [id]);
   if (table === 'labs') run('DELETE FROM lab_results WHERE lab_id = ?', [id]);
+  if (table === 'visits') run('UPDATE visits SET from_visit_id = NULL WHERE from_visit_id = ?', [id]);
   if (table === 'episodes') {
     for (const t of ['diary', 'visits', 'courses', 'labs']) run(`UPDATE ${t} SET episode_id = NULL WHERE episode_id = ?`, [id]);
     run('UPDATE episodes SET parent_id = NULL WHERE parent_id = ?', [id]);

@@ -13,14 +13,14 @@
     episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'chronic', 'parent_id', 'note'], num: ['chronic', 'parent_id'], defaults: { chronic: 0 }, order: [['start_date', -1]] },
     diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'], json: ['symptoms'],
                    num: ['feeling', 'severity', 'temperature', 'episode_id'], order: [['date', -1], ['time', -1], ['id', -1]] },
-    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'next_date', 'cost', 'dms', 'note'],
-                   num: ['doctor_id', 'place_id', 'episode_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1], ['time', -1]] },
+    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'from_visit_id', 'next_date', 'cost', 'dms', 'note'],
+                   num: ['doctor_id', 'place_id', 'episode_id', 'from_visit_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1], ['time', -1]] },
     courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                    json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'],
                    defaults: { per_day: 1, is_kok: 0, active: 1 }, order: [['active', -1], ['start_date', -1]] },
     intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], defaults: { slot: 0, taken: 1 }, order: [['date', -1]] },
     labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1]] },
-    lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: [['id', 1]] },
+    lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'flag', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: [['id', 1]] },
     cycles:      { cols: ['start_date', 'end_date', 'flow', 'note'], order: [['start_date', -1]] },
     expenses:    { cols: ['date', 'amount', 'category', 'title', 'place_id', 'entity_type', 'entity_id', 'deductible', 'note'],
                    num: ['amount', 'place_id', 'entity_id', 'deductible'], defaults: { deductible: 1 }, order: [['date', -1], ['id', -1]] },
@@ -169,6 +169,7 @@
     S.tables.reminders = rows('reminders').filter(r => !(r.entity_type === t && r.entity_id === id));
     for (const f of rows('files').filter(f => f.entity_type === t && f.entity_id === id)) await deleteFile(f.id);
     if (t === 'courses') S.tables.intakes = rows('intakes').filter(i => i.course_id !== id);
+    if (t === 'visits') for (const v of rows('visits')) if (v.from_visit_id === id) v.from_visit_id = null;
     if (t === 'labs') S.tables.lab_results = rows('lab_results').filter(r => r.lab_id !== id);
     if (t === 'episodes') {
       for (const tt of ['diary', 'visits', 'courses', 'labs']) for (const r of rows(tt)) if (r.episode_id === id) r.episode_id = null;
@@ -273,6 +274,15 @@
   }
 
   // ---------- Импорт цикла из Apple Health ----------
+  const RU_MONTHS = { 'янв': 1, 'фев': 2, 'мар': 3, 'апр': 4, 'ма': 5, 'июн': 6, 'июл': 7, 'авг': 8, 'сен': 9, 'окт': 10, 'ноя': 11, 'дек': 12 };
+  // Даты (YYYY-MM-DD) из произвольного текста: ISO, 19.09.2026, «19 сент. 2026 г.»
+  function extractDates(text) {
+    const out = new Set(); const s = String(text || '');
+    for (const m of s.matchAll(/(\d{4})-(\d{2})-(\d{2})/g)) out.add(`${m[1]}-${m[2]}-${m[3]}`);
+    for (const m of s.matchAll(/(\d{1,2})\.(\d{2})\.(\d{4})/g)) out.add(`${m[3]}-${m[2]}-${m[1].padStart(2, '0')}`);
+    for (const m of s.matchAll(/(\d{1,2})\s+(янв|фев|мар|апр|ма|июн|июл|авг|сен|окт|ноя|дек)[а-яё.]*\s+(\d{4})/gi)) out.add(`${m[3]}-${String(RU_MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`);
+    return [...out].filter(d => !Number.isNaN(Date.parse(d))).sort();
+  }
   function importBleedingDays(dayFlow) {
     const days = [...dayFlow.keys()].sort(); const runs = [];
     for (const d of days) { const last = runs[runs.length - 1]; if (last && daysBetween(last.end, d) <= 2) { last.end = d; last.flows.push(dayFlow.get(d)); } else runs.push({ start: d, end: d, flows: [dayFlow.get(d)] }); }
@@ -381,6 +391,14 @@
     if (method === 'GET' && path === '/api/export') return exportData();
     if (method === 'POST' && path === '/api/import') return importData(body);
     if (method === 'POST' && path === '/api/import/apple-health') { const f = fd?.get('file'); if (!f) fail('Нет файла'); return importAppleHealth(f); }
+    // даты месячных из буфера обмена / ссылки (iOS «Команды»): {dates:[...]} или произвольный текст с датами
+    if (method === 'POST' && path === '/api/cycles/sync') {
+      const src = Array.isArray(body?.dates) ? body.dates.join('\n') : String(body?.dates ?? body ?? '');
+      const dates = extractDates(src);
+      if (!dates.length) fail('Не нашла ни одной даты');
+      const r = importBleedingDays(new Map(dates.map(d => [d, null]))); await save();
+      return { ok: true, dates: dates.length, ...r };
+    }
     if (path === '/api/settings/token') return { token: '' };
     if (method === 'POST' && path === '/api/upload') {
       const entity_type = fd.get('entity_type'), entity_id = Number(fd.get('entity_id'));

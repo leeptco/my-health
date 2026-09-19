@@ -2,7 +2,7 @@
 
 // ===================== Константы =====================
 const SYMPTOM_GROUPS = [
-  ['Голова', ['Головная боль', 'Мигрень', 'Головокружение']],
+  ['Голова и шея', ['Головная боль', 'Мигрень', 'Головокружение', 'Напряжение в шее / спине']],
   ['Горло и ЛОР', ['Болит горло', 'Болят миндалины / пробки', 'Увеличены лимфоузлы', 'Нет голоса', 'Насморк', 'Кашель', 'Болит ухо']],
   ['Живот и таз', ['Болит живот', 'Тошнота', 'Тянет поясницу / низ живота', 'Мочевой пузырь / цистит', 'Тазовая боль', 'Болезненные месячные', 'Мазня / кровянистые выделения']],
   ['Общее', ['Температура', 'Слабость', 'Озноб', 'Плохой сон', 'Зубы', 'Кожа / аллергия']],
@@ -273,30 +273,8 @@ const pageHead = (title, sub, actions = '') => `<div class="page-head"><div><h1>
 const addBtn = (act, label) => `<button class="btn primary small desk-only" data-act="${act}">＋ ${label}</button>`;
 
 // ---------- Сегодня ----------
-// Хорошие новости: сколько дней ничего не болит и как давно не было конкретных симптомов
-function goodNewsCard(diary, today) {
-  if (!diary.length) return '';
-  const isBad = (d) => (d.feeling && d.feeling <= 2) || (d.symptoms || []).length > 0;
-  const bad = diary.filter(d => isBad(d) && d.date <= today);
-  const lastBad = bad.map(d => d.date).sort().pop();
-  const first = diary.map(d => d.date).sort()[0];
-  const streak = lastBad ? daysBetween(lastBad, today) : daysBetween(first, today) + 1;
-  const since90 = addDays(today, -90);
-  const good90 = 90 - new Set(bad.filter(d => d.date > since90).map(d => d.date)).size;
-  const last = {}, cnt = {};
-  for (const d of diary) for (const s of d.symptoms || []) { cnt[s] = (cnt[s] || 0) + 1; if (!last[s] || d.date > last[s]) last[s] = d.date; }
-  // симптомы, которых не было дольше общей серии — их и отмечаем
-  const chips = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 8).map(s => ({ s, n: daysBetween(last[s], today) })).filter(x => x.n > streak).sort((a, b) => b.n - a.n).slice(0, 4);
-  const word = (n) => plural(n, 'день', 'дня', 'дней').replace(/^\d+\s*/, '');
-  const head = streak === 0
-    ? `<p>Сегодня непросто — бывает. Зато хороших дней за последние 90 было <b>${good90}</b>.</p>`
-    : `<div class="row" style="align-items:baseline;gap:12px"><div style="font-size:42px;font-weight:700;color:var(--accent);line-height:1">${streak}</div><div><div><b>${word(streak)}</b> ничего не болит</div><div class="small muted">хороших дней за 90: ${good90}</div></div></div>`;
-  return `<div class="card" style="background:var(--accent-soft)"><div class="card-title"><h2>🌿 Хорошие новости</h2></div>${head}
-    ${chips.length ? `<div class="chips mt">${chips.map(c => `<span class="chip">${c.n} дн. без «${esc(c.s)}»</span>`).join('')}</div>` : ''}</div>`;
-}
-
 async function viewToday() {
-  const [t, upcomingVisits, allDiary] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`), GET('/api/diary')]);
+  const [t, upcomingVisits] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`)]);
   const upcoming = upcomingVisits.filter(v => v.date > todayStr() || !v.conclusion).sort((a, b) => a.date.localeCompare(b.date));
   const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>🩺 Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
       ${upcoming.map(v => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="pill-row" data-act="visit-edit" data-id="${v.id}" style="cursor:pointer"><div class="info"><div class="name">${d ? esc(d.name) : 'Врач'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
@@ -319,9 +297,8 @@ async function viewToday() {
       ${k.on_break
         ? `<p><b>Перерыв</b>: день ${k.break_day} из ${k.break_days}. Новая пачка — <b>${fmtDate(k.next_pack)}</b>.</p>`
         : `<p><b>Таблетка ${k.pill} из ${k.pack_size}</b>. Последняя в пачке — ${fmtDate(k.last_pill)}${k.break_days ? `, перерыв до ${fmtDate(k.next_pack)}` : ''}.</p>`}
-      <div class="progress ${k.missed.length ? 'warn' : ''}"><div style="width:${pct}%"></div></div>
-      ${k.missed.length ? `<p class="mt small" style="color:var(--warn)">⚠️ Нет отметки за: ${k.missed.map(d => fmtDate(d)).join(', ')}</p>` : ''}
-      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${k.course_id}">Начать новую пачку сегодня</button></div>
+      <div class="progress"><div style="width:${pct}%"></div></div>
+      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${k.course_id}">Начать новую пачку сегодня</button><button class="btn small ghost" data-act="ics-pills">📅 Напоминание в календарь</button></div>
     </div>`;
   }
 
@@ -334,8 +311,6 @@ async function viewToday() {
   }).join('') : '<p class="muted">Ближайших напоминаний нет</p>';
 
   const eps = t.episodes.length ? t.episodes.map(e => `<div class="pill-row" data-act="episode-open" data-id="${e.id}" style="cursor:pointer"><div class="info"><div class="name">${esc(e.title)}</div><div class="dose">с ${fmtDate(e.start_date)} · ${plural(daysBetween(e.start_date, t.date) + 1, 'день', 'дня', 'дней')}${e.diagnosis ? ' · ' + esc(e.diagnosis) : ''}</div></div><span class="muted">›</span></div>`).join('') : '';
-
-  const diary = t.diary.length ? t.diary.map(d => diaryItem(d)).join('') : '<p class="muted">Записей пока нет</p>';
 
   const cyc = t.cycle ? `<div class="stat"><div class="v">${t.cycle.day}</div><div class="l">день цикла · след. ~${fmtDate(t.cycle.next_predicted)}</div></div>` : '';
 
@@ -355,8 +330,6 @@ async function viewToday() {
     ${kokCard}
     <div class="card"><div class="card-title"><h2>🔔 Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
     ${eps ? `<div class="card"><div class="card-title"><h2>🤒 Сейчас болею</h2><a href="#episodes" class="small">Все →</a></div>${eps}</div>` : ''}
-    ${goodNewsCard(allDiary, t.date)}
-    <div class="card"><div class="card-title"><h2>📝 Последние записи</h2><a href="#diary" class="small">Дневник →</a></div><div class="list">${diary}</div></div>
     <details class="card"><summary class="small muted" style="cursor:pointer">Статистика за 90 дней</summary>
       <div class="grid3 mt">
         <div class="stat"><div class="v">${t.stats.bad_days}</div><div class="l">плохих дней за 90</div></div>
@@ -431,14 +404,20 @@ async function diaryForm(row = {}, preset = {}) {
 
 // ---------- Визиты ----------
 const untilLabel = (date, today) => { const n = daysBetween(today, date); return n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${plural(n, 'день', 'дня', 'дней')}`; };
-function visitItem(v, today = todayStr()) {
+const visitLabel = (v) => { const d = doctor(v.doctor_id); return `${d ? d.name : 'врач'}${d?.specialty ? ` (${d.specialty})` : ''} · ${fmtDate(v.date)}`; };
+function visitItem(v, today = todayStr(), ctx = {}) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
   const future = v.date > today || (v.date === today && !v.conclusion);
+  const from = v.from_visit_id && ctx.byId ? ctx.byId[v.from_visit_id] : null;
+  const followUps = ctx.all ? ctx.all.filter(x => x.from_visit_id === v.id) : [];
   return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}
     <div class="body">
       <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${future && v.date >= today ? ` <span class="tag accent">${untilLabel(v.date, today)}${v.time ? ' · ' + v.time : ''}</span>` : ''}</div>
       ${p ? `<div class="sub">📍 ${esc(p.name)}${p.address ? ', ' + esc(p.address) : ''}</div>` : ''}
       ${future && v.reason ? `<div class="meta">${esc(v.reason)}</div>` : ''}
+      ${from ? `<div class="meta">↳ по направлению: ${esc(visitLabel(from))}</div>` : ''}
+      ${followUps.length ? `<div class="meta">→ приём по направлению: ${followUps.map(f => esc(visitLabel(f))).join('; ')}</div>` : ''}
+      ${future ? `<div class="row mt"><button class="btn small ghost" data-act="ics-visit" data-id="${v.id}">📅 В календарь</button></div>` : ''}
       ${v.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
       ${v.conclusion ? `<div class="meta ellipsis">${esc(v.conclusion)}</div>` : ''}
       <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.dms ? '<span class="tag accent">ДМС</span>' : ''}${v.cost && !v.dms ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">🤒 ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
@@ -463,23 +442,34 @@ async function viewVisits() {
   const past = all.filter(v => v.date <= today);
   // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
   const planned = past.filter(v => v.next_date && v.next_date >= today && !all.some(x => x.date === v.next_date && x.doctor_id === v.doctor_id));
+  // направления, по которым ещё нет записи к врачу (за последние полгода)
+  const openReferrals = past.filter(v => v.referrals && v.date >= addDays(today, -180) && !everything.some(x => x.from_visit_id === v.id));
   const groups = groupBy(past, v => v.date.slice(0, 4));
-  const plannedHtml = planned.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-plan" data-id="${v.id}" style="border:1px dashed var(--line);box-shadow:none;background:transparent">${dateCol(v.next_date)}
+  const ctx = { all: everything, byId: Object.fromEntries(everything.map(v => [v.id, v])) };
+  const dashed = 'style="border:1px dashed var(--line);box-shadow:none;background:transparent"';
+  const plannedHtml = planned.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-plan" data-id="${v.id}" ${dashed}>${dateCol(v.next_date)}
       <div class="body"><div class="title muted">Повторный визит: ${d ? esc(d.name) : 'врач'}${d?.specialty ? ` · ${esc(d.specialty)}` : ''}</div>
       <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
+  const referralsHtml = openReferrals.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-from-referral" data-id="${v.id}" ${dashed}><div class="feel">📄</div>
+      <div class="body"><div class="title muted">Направление: ${esc(v.referrals)}</div>
+      <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)} · <span style="color:var(--accent)">записаться →</span></div></div></div>`; }).join('');
   render(`
     ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит') + ' <a class="btn small" href="#refs">Врачи и места</a>')}
     ${filters}
     <div class="group-label">Предстоящие</div>
-    <div class="list">${upcoming.length || planned.length ? upcoming.map(v => visitItem(v, today)).join('') + plannedHtml : '<div class="empty">Ничего не запланировано. Чтобы записаться — нажми ＋ и поставь будущую дату.</div>'}</div>
+    <div class="list">${upcoming.length || planned.length ? upcoming.map(v => visitItem(v, today, ctx)).join('') + plannedHtml : '<div class="empty">Ничего не запланировано. Чтобы записаться — нажми ＋ и поставь будущую дату.</div>'}</div>
+    ${referralsHtml ? `<div class="group-label">Направления без записи</div><div class="list">${referralsHtml}</div>` : ''}
     <div class="group-label">Прошедшие</div>
-    ${past.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label small" style="margin-top:6px">${y}</div><div class="list">${list.map(v => visitItem(v, today)).join('')}</div>`).join('')
+    ${past.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label small" style="margin-top:6px">${y}</div><div class="list">${list.map(v => visitItem(v, today, ctx)).join('')}</div>`).join('')
       : '<div class="empty">Визитов пока нет. Нажми ＋ и запиши, что сказал врач.</div>'}
     ${fab('visit-new')}
   `);
 }
 async function visitForm(id, preset = {}) {
-  const row = id ? await loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset };
+  const [row, allVisits] = await Promise.all([id ? loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset }, GET('/api/visits')]);
+  // визиты с направлениями, откуда могла прийти эта запись
+  const refSources = allVisits.filter(v => v.id !== Number(id) && v.referrals && v.date <= (row.date || todayStr())).slice(0, 30)
+    .map(v => [v.id, `${visitLabel(v)} — ${v.referrals.length > 40 ? v.referrals.slice(0, 40) + '…' : v.referrals}`]);
   openSheet({
     title: id ? (row.date > todayStr() ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
     body: `
@@ -488,6 +478,7 @@ async function visitForm(id, preset = {}) {
       ${refSelect('doctor', row.doctor_id, 'Врач')}
       ${refSelect('place', row.place_id, 'Где')}
       ${refSelect('episode', row.episode_id, 'Относится к болезни')}
+      ${refSources.length || row.from_visit_id ? F.select('from_visit_id', 'По направлению от визита', refSources, row.from_visit_id, { none: '— нет, сама записалась —' }) : ''}
       ${F.area('reason', 'С чем пришла', row.reason, 'Жалобы, повод визита')}
       ${F.area('conclusion', 'Что сказал врач', row.conclusion, 'Заключение, рекомендации, что назначил')}
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
@@ -606,7 +597,7 @@ async function viewLabs(params) {
   for (const l of labs) {
     const rs = results.filter(r => r.lab_id === l.id);
     l.results_n = rs.length;
-    l.out_n = rs.filter(r => r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max))).length;
+    l.out_n = rs.filter(resOut).length;
     l.files_n = files.filter(f => f.entity_id === l.id).length;
   }
   const seg = `<div class="seg mb"><button class="${labsState.mode === 'list' ? 'on' : ''}" data-act="labs-mode" data-mode="list">Список</button><button class="${labsState.mode === 'chart' ? 'on' : ''}" data-act="labs-mode" data-mode="chart">Динамика</button></div>`;
@@ -630,10 +621,15 @@ async function viewLabs(params) {
   }
   render(`${pageHead('Анализы', plural(labs.length, 'исследование', 'исследования', 'исследований'), addBtn('lab-new', 'Анализ'))}${seg}${body}${fab('lab-new')}`);
 }
+// Показатель вне нормы: либо врач/лаборатория пометили ↑/↓, либо число вышло за референс
+const FLAG_LABEL = { norm: 'норма', high: '↑ повышено', low: '↓ понижено' };
+const resOut = (r) => r.flag === 'high' || r.flag === 'low' || (r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max)));
+const resFlagTag = (r) => r.flag === 'high' ? ' ↑' : r.flag === 'low' ? ' ↓' : (r.flag === 'norm' ? ' ✓' : '');
 function resultRow(r = {}) {
   return `<div class="res-row">
     <input name="r_indicator[]" list="indicator-names" placeholder="Показатель" value="${esc(r.indicator || '')}">
     <input name="r_value[]" placeholder="Значение" value="${esc(r.value ?? r.value_text ?? '')}" inputmode="decimal">
+    <select name="r_flag[]" title="Оценка"><option value="">—</option>${Object.entries(FLAG_LABEL).map(([v, l]) => `<option value="${v}" ${r.flag === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <input name="r_unit[]" class="desk" placeholder="Ед." value="${esc(r.unit || '')}">
     <input name="r_min[]" class="desk" placeholder="Норма от" value="${esc(r.ref_min ?? '')}" inputmode="decimal">
     <input name="r_max[]" class="desk" placeholder="до" value="${esc(r.ref_max ?? '')}" inputmode="decimal">
@@ -673,7 +669,7 @@ async function labForm(id) {
         const numOrNull = (s) => { s = s.replace(',', '.'); return s !== '' && !Number.isNaN(Number(s)) ? Number(s) : null; };
         // если норма не указана, но показатель уже встречался — подставим прошлую норму
         const known = labsState.names.find(n => n.indicator.toLowerCase() === g('r_indicator').toLowerCase());
-        return { indicator: g('r_indicator'), value: num, value_text: num == null ? raw : null, unit: g('r_unit') || known?.unit || null,
+        return { indicator: g('r_indicator'), value: num, value_text: num == null ? raw : null, flag: g('r_flag') || null, unit: g('r_unit') || known?.unit || null,
           ref_min: numOrNull(g('r_min')) ?? (g('r_min') === '' ? known?.ref_min ?? null : null), ref_max: numOrNull(g('r_max')) ?? (g('r_max') === '' ? known?.ref_max ?? null : null) };
       }).filter(r => r.indicator);
       const saved = await save('labs', { ...d, id });
@@ -683,6 +679,36 @@ async function labForm(id) {
     },
     onDelete: id ? async () => { await DEL(`/api/labs/${id}`); toast('Удалено'); route(); } : null,
   });
+}
+
+// ---------- Календарь iPhone (.ics) ----------
+// Событие календаря: с датой и временем — напоминание за день и за час; без времени — на весь день, напоминание накануне в 18:00
+const icsEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsDate = (d) => d.replace(/-/g, '');
+const icsDT = (d, t) => `${icsDate(d)}T${(t || '09:00').replace(':', '')}00`;
+function icsEvent({ uid, date, time, title, desc, location, rrule, until }) {
+  const L = ['BEGIN:VEVENT', `UID:${uid}@my-health`, `DTSTAMP:${icsDT(todayStr(), nowTime())}`];
+  if (time) { L.push(`DTSTART:${icsDT(date, time)}`); const [h, m] = time.split(':').map(Number); const end = `${String(Math.min(23, h + 1)).padStart(2, '0')}:${String(m).padStart(2, '0')}`; L.push(`DTEND:${icsDT(date, end)}`); }
+  else { L.push(`DTSTART;VALUE=DATE:${icsDate(date)}`, `DTEND;VALUE=DATE:${icsDate(addDays(date, 1))}`); }
+  if (rrule) L.push(`RRULE:${rrule}${until ? `;UNTIL=${icsDate(until)}T235959` : ''}`);
+  L.push(`SUMMARY:${icsEsc(title)}`);
+  if (desc) L.push(`DESCRIPTION:${icsEsc(desc)}`);
+  if (location) L.push(`LOCATION:${icsEsc(location)}`);
+  const alarms = rrule ? ['PT0M'] : time ? ['P1D', 'PT1H'] : ['PT6H']; // всё-на-день: 18:00 накануне
+  for (const a of alarms) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(title)}`, `TRIGGER:-${a}`, 'END:VALARM');
+  L.push('END:VEVENT');
+  return L.join('\r\n');
+}
+const icsCalendar = (events) => ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//my-health//RU', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Здоровье', ...events, 'END:VCALENDAR'].join('\r\n') + '\r\n';
+function visitEvent(v) {
+  const d = doctor(v.doctor_id), p = place(v.place_id);
+  return icsEvent({ uid: `visit-${v.id}`, date: v.date, time: v.time, title: `🩺 ${d ? d.name : 'Врач'}${d?.specialty ? ` (${d.specialty})` : ''}`, desc: v.reason, location: p ? [p.name, p.address].filter(Boolean).join(', ') : '' });
+}
+const reminderEvent = (r) => icsEvent({ uid: `rem-${r.id}`, date: r.date, title: `🔔 ${r.title}`, desc: r.note });
+const pillEvent = (c, time) => icsEvent({ uid: `pill-${c.id}-${time.replace(':', '')}`, date: c.start_date > todayStr() ? c.start_date : todayStr(), time, title: `💊 ${c.med_name}${c.dose ? ' — ' + c.dose : ''}`, desc: c.purpose, rrule: 'FREQ=DAILY', until: c.end_date });
+async function shareIcs(events, name) {
+  const blob = new Blob([icsCalendar(events)], { type: 'text/calendar;charset=utf-8' });
+  if (await shareOrDownload(blob, name)) toast('Открой файл — Календарь предложит добавить события');
 }
 
 // ---------- Цикл ----------
@@ -709,13 +735,26 @@ async function viewCycle() {
       ${open ? `<button class="btn primary" data-act="cycle-end">Закончились сегодня</button>` : `<button class="btn primary" data-act="cycle-start">🩸 Начались сегодня</button>`}
       <button class="btn" data-act="cycle-new">＋ Указать даты вручную</button>
     </div>
+    <details class="card"><summary class="small" style="cursor:pointer;color:var(--accent)">📥 Перенести из приложения «Здоровье» (без двойного ввода)</summary>
+      <p class="small mt">Прямого доступа к «Здоровью» у веб-приложения нет, но iPhone умеет отдавать данные через «Команды». Один раз создай команду — дальше два нажатия: запустить команду, здесь нажать «Вставить».</p>
+      <div class="row wrap mb"><button class="btn primary small" data-act="cycle-paste">📋 Вставить даты из буфера</button><button class="btn small" data-act="cycle-paste-manual">Ввести текстом</button></div>
+      <p class="small"><b>Команда «Цикл → Здоровье»</b> (приложение «Команды» → ＋):</p>
+      <ol class="small" style="padding-left:18px;margin:0 0 8px">
+        <li><b>Найти образцы здоровья</b> — тип «Менструация»; фильтр: Дата начала — за последние 120 дней; сортировка не важна.</li>
+        <li><b>Получить сведения об образце здоровья</b> → «Дата начала».</li>
+        <li><b>Форматировать дату</b> → формат «Пользовательский»: <code>yyyy-MM-dd</code>.</li>
+        <li><b>Объединить текст</b> → разделитель «Новая строка».</li>
+        <li><b>Скопировать в буфер обмена</b>.</li>
+        <li>Необязательно: <b>Открыть приложение</b> → «Здоровье» (наше, с экрана «Домой») — и сразу нажать «Вставить даты из буфера».</li>
+      </ol>
+      <p class="small muted">Повторный перенос ничего не задублирует: дни склеиваются в эпизоды, уже известные — обновляются. Симптомы и заметки из «Здоровья» не переносятся. Полный экспорт файлом (export.xml) по-прежнему есть в разделе «Экспорт».</p>
+    </details>
     ${t.cycle ? `<div class="grid3 mb">
       <div class="stat"><div class="v">${t.cycle.day}</div><div class="l">день цикла</div></div>
       <div class="stat"><div class="v">${t.cycle.avg_length}</div><div class="l">средняя длина</div></div>
       <div class="stat"><div class="v">${fmtDate(t.cycle.next_predicted)}</div><div class="l">следующие ~</div></div></div>` : ''}
     ${t.kok ? `<div class="card"><div class="card-title"><h2>🌙 ${esc(t.kok.name)}</h2><button class="btn small ghost" data-act="course-edit" data-id="${t.kok.course_id}">Изменить</button></div>
       <p>${t.kok.on_break ? `Перерыв, день ${t.kok.break_day} из ${t.kok.break_days}. Новая пачка — <b>${fmtDate(t.kok.next_pack)}</b>` : `Таблетка <b>${t.kok.pill} из ${t.kok.pack_size}</b>, последняя — ${fmtDate(t.kok.last_pill)}`}</p>
-      ${t.kok.missed.length ? `<p class="small" style="color:var(--warn)">⚠️ Нет отметки за: ${t.kok.missed.map(d => fmtDate(d)).join(', ')}</p>` : '<p class="small muted">Пропусков в текущей пачке нет</p>'}
     </div>` : `<div class="card"><p class="muted">Принимаешь КОК или гестагены? <a href="#" data-act="course-new" data-kok="1">Добавь курс с галочкой «Гормональная терапия»</a> — здесь появится счётчик таблеток и пропусков.</p></div>`}
     <div class="card"><div class="card-title"><h2>Головная боль по дням цикла</h2><span class="muted small">${plural(matched, 'запись', 'записи', 'записей')}</span></div>
       ${matched ? `<div class="vbars" style="margin-bottom:22px">${buckets.map((n, i) => `<div style="height:${(100 * n) / maxB}%;opacity:${n ? 1 : 0.15}" title="день ${i + 1}: ${n}">${i % 5 === 0 ? `<span>${i + 1}</span>` : ''}</div>`).join('')}</div><p class="small muted">Если столбики выше в начале цикла или в перерыве КОК — это менструальная мигрень, стоит обсудить с гинекологом/неврологом.</p>` : '<p class="muted small">Отмечай в дневнике «Мигрень» или «Головная боль» — здесь будет видно, в какие дни цикла она чаще.</p>'}
@@ -781,10 +820,10 @@ function fileLinks(files) {
 function resultsTable(results) {
   if (!results?.length) return '';
   return `<table class="res-table mt">${results.map(r => {
-    const out = r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max));
-    const val = r.value != null ? r.value : (r.value_text || '—');
+    const out = resOut(r);
+    const val = r.value != null ? r.value : (r.value_text || (r.flag ? FLAG_LABEL[r.flag] : '—'));
     const ref = r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''}–${r.ref_max ?? ''}` : '';
-    return `<tr><td>${esc(r.indicator)}</td><td class="${out ? 'out' : ''}">${esc(String(val))}${out ? ' ⚠️' : ''}</td><td class="muted">${esc(r.unit || '')}</td><td class="muted">${ref}</td></tr>`;
+    return `<tr><td>${esc(r.indicator)}</td><td class="${out ? 'out' : ''}">${esc(String(val))}${r.value != null || r.value_text ? resFlagTag(r) : ''}${out && !r.flag ? ' ⚠️' : ''}</td><td class="muted">${esc(r.unit || '')}</td><td class="muted">${ref}</td></tr>`;
   }).join('')}</table>`;
 }
 // Страница одной болезни: всё, что к ней привязано, в одном месте
@@ -1020,6 +1059,10 @@ async function viewExportLocal() {
       <details class="mt"><summary class="small muted" style="cursor:pointer">Начать с чистого листа</summary>
         <p class="small mt">Удаляет все записи и файлы на этом устройстве (например, тестовые). Сначала сохрани копию, если что-то из этого ещё нужно.</p>
         <button class="btn danger small" data-act="wipe">Удалить все данные</button></details></div>
+    <div class="card"><div class="card-title"><h2>📅 Уведомления через Календарь</h2></div>
+      <p class="small">Веб-приложение без сервера не может само присылать уведомления на iPhone, зато может отдать события в «Календарь» — он и напомнит. Файл откроется через «Поделиться»: выбери «Календарь» или сохрани в «Файлы» и нажми на него → «Добавить всё».</p>
+      <div class="row wrap"><button class="btn primary" data-act="ics-all">Предстоящие визиты и напоминания</button><button class="btn" data-act="ics-pills">Ежедневные таблетки</button></div>
+      <p class="small muted mt">Визит с временем — напоминание за день и за час; без времени — накануне в 18:00. Таблетки — ежедневное событие во время приёма из курса, до даты окончания курса. Добавила новый визит — нажми «📅 В календарь» прямо на его карточке.</p></div>
     ${appleHealthCard()}
     <div class="card"><div class="card-title"><h2>💻 Телефон и ноутбук</h2></div>
       <p class="small">На ноутбуке открой ту же ссылку — там будет своя, отдельная база. Чтобы перенести данные: на телефоне «Сохранить копию» → файл на ноутбук (iCloud, Telegram, почта) → на ноутбуке «Восстановить из файла». И в обратную сторону так же. Автоматической синхронизации в этом режиме нет — актуальной считай ту копию, где записывала последней.</p></div>
@@ -1124,6 +1167,31 @@ const actions = {
     await window.localApi.importData({ tables: {} }); await loadRefs(); toast('Все данные удалены'); location.hash = '#today'; route();
   },
   'visit-plan': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: v.next_date, doctor_id: v.doctor_id, place_id: v.place_id, episode_id: v.episode_id, reason: 'Повторный визит' }); },
+  'visit-from-referral': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: addDays(todayStr(), 7), from_visit_id: v.id, episode_id: v.episode_id, doctor_id: null, reason: 'По направлению: ' + v.referrals }); },
+  'ics-visit': async (d) => { const v = await GET(`/api/visits/${d.id}`); await shareIcs([visitEvent(v)], `visit-${v.date}.ics`); },
+  'ics-pills': async () => {
+    const t = await GET('/api/today?date=' + todayStr());
+    const evs = t.courses.flatMap(c => (c.slots || []).map(s => s.time ? pillEvent(c, s.time) : null)).filter(Boolean);
+    if (!evs.length) return toast('У активных курсов не указано время приёма — задай его в курсе', true);
+    await shareIcs(evs, 'pills.ics');
+  },
+  'ics-all': async () => {
+    const [visits, t] = await Promise.all([GET(`/api/visits?from=${todayStr()}`), GET('/api/today?date=' + todayStr())]);
+    const evs = [...visits.filter(v => v.date >= todayStr()).map(visitEvent), ...t.reminders.filter(r => r.date >= todayStr()).map(reminderEvent)];
+    if (!evs.length) return toast('Предстоящих визитов и напоминаний нет', true);
+    await shareIcs(evs, `health-${todayStr()}.ics`);
+  },
+  'cycle-paste': async () => {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch { return toast('Разреши доступ к буферу обмена или вставь даты вручную', true); }
+    try { const r = await POST('/api/cycles/sync', { dates: text }); toast(`Найдено дат: ${r.dates}, новых эпизодов: ${r.added}, обновлено: ${r.updated}`); route(); }
+    catch { /* тост уже показан */ }
+  },
+  'cycle-paste-manual': async () => {
+    const text = prompt('Вставь даты месячных (любой формат, по одной в строке или через запятую):');
+    if (!text) return;
+    try { const r = await POST('/api/cycles/sync', { dates: text }); toast(`Найдено дат: ${r.dates}, новых эпизодов: ${r.added}, обновлено: ${r.updated}`); route(); } catch {}
+  },
   'course-new': (d) => courseForm(null, d.kok ? { is_kok: 1, pack_size: 28, break_days: 0 } : {}),
   'course-edit': (d) => courseForm(d.id),
   'toggle-intake': async (d, el) => { const r = await POST('/api/intakes/toggle', { course_id: Number(d.course), date: todayStr(), slot: Number(d.slot) }); el.classList.toggle('on', r.taken); el.textContent = (r.taken ? '✓ ' : '') + el.textContent.replace('✓ ', ''); },
@@ -1249,7 +1317,12 @@ $$('#sheet [data-close]').forEach(el => el.addEventListener('click', closeSheet)
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
 // ===================== Роутер =====================
-const VIEWS = { today: viewToday, diary: viewDiary, visits: viewVisits, meds: viewMeds, labs: viewLabs, cycle: viewCycle, episodes: viewEpisodes, episode: viewEpisode, expenses: viewExpenses, refs: viewRefs, export: viewExport, report: viewReport, more: viewMore };
+// #import?dates=2026-09-01,2026-09-02 — вход для iOS «Команд» (действие «Открыть URL»)
+async function viewImport(params) {
+  if (params.dates) { try { const r = await POST('/api/cycles/sync', { dates: params.dates }); toast(`Цикл: дат ${r.dates}, новых ${r.added}, обновлено ${r.updated}`); } catch {} }
+  location.replace('#cycle');
+}
+const VIEWS = { today: viewToday, diary: viewDiary, visits: viewVisits, meds: viewMeds, labs: viewLabs, cycle: viewCycle, episodes: viewEpisodes, episode: viewEpisode, expenses: viewExpenses, refs: viewRefs, export: viewExport, report: viewReport, more: viewMore, import: viewImport };
 const MOB_TABS = new Set(['today', 'diary', 'visits', 'meds']);
 async function route() {
   if (sheet.open) { sheet.pushed = false; closeSheet(true); } // переход по разделам закрывает открытую форму
