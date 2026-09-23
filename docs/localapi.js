@@ -13,8 +13,8 @@
     episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'chronic', 'parent_id', 'note'], num: ['chronic', 'parent_id'], defaults: { chronic: 0 }, order: [['start_date', -1]] },
     diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'], json: ['symptoms'],
                    num: ['feeling', 'severity', 'temperature', 'episode_id'], order: [['date', -1], ['time', -1], ['id', -1]] },
-    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'from_visit_id', 'next_date', 'cost', 'dms', 'note'],
-                   num: ['doctor_id', 'place_id', 'episode_id', 'from_visit_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1], ['time', -1]] },
+    visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'referrals_done', 'from_visit_id', 'from_visit_ids', 'next_date', 'cost', 'dms', 'note'],
+                   json: ['from_visit_ids'], num: ['doctor_id', 'place_id', 'episode_id', 'from_visit_id', 'cost', 'dms', 'referrals_done'], defaults: { dms: 0, referrals_done: 0 }, order: [['date', -1], ['time', -1]] },
     courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                    json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'],
                    defaults: { per_day: 1, is_kok: 0, active: 1 }, order: [['active', -1], ['start_date', -1]] },
@@ -169,7 +169,7 @@
     S.tables.reminders = rows('reminders').filter(r => !(r.entity_type === t && r.entity_id === id));
     for (const f of rows('files').filter(f => f.entity_type === t && f.entity_id === id)) await deleteFile(f.id);
     if (t === 'courses') S.tables.intakes = rows('intakes').filter(i => i.course_id !== id);
-    if (t === 'visits') for (const v of rows('visits')) if (v.from_visit_id === id) v.from_visit_id = null;
+    if (t === 'visits') for (const v of rows('visits')) { if (v.from_visit_id === id) v.from_visit_id = null; if (Array.isArray(v.from_visit_ids)) v.from_visit_ids = v.from_visit_ids.filter(x => x !== id); }
     if (t === 'labs') S.tables.lab_results = rows('lab_results').filter(r => r.lab_id !== id);
     if (t === 'episodes') {
       for (const tt of ['diary', 'visits', 'courses', 'labs']) for (const r of rows(tt)) if (r.episode_id === id) r.episode_id = null;

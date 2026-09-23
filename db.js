@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS diary_date ON diary(date);
 `);
 
 // Миграции: новые колонки для уже существующих баз
-for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0'], ['episodes', 'chronic', 'INTEGER DEFAULT 0'], ['episodes', 'parent_id', 'INTEGER'], ['visits', 'from_visit_id', 'INTEGER'], ['lab_results', 'flag', 'TEXT']]) {
+for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0'], ['episodes', 'chronic', 'INTEGER DEFAULT 0'], ['episodes', 'parent_id', 'INTEGER'], ['visits', 'from_visit_id', 'INTEGER'], ['visits', 'from_visit_ids', 'TEXT'], ['visits', 'referrals_done', 'INTEGER DEFAULT 0'], ['lab_results', 'flag', 'TEXT']]) {
   const cols = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`);
 }
@@ -106,8 +106,8 @@ const TABLES = {
   episodes:    { cols: ['title', 'start_date', 'end_date', 'diagnosis', 'chronic', 'parent_id', 'note'], num: ['chronic', 'parent_id'], order: 'start_date DESC' },
   diary:       { cols: ['date', 'time', 'feeling', 'symptoms', 'severity', 'temperature', 'episode_id', 'note'],
                  json: ['symptoms'], num: ['feeling', 'severity', 'temperature', 'episode_id'], order: 'date DESC, time DESC, id DESC' },
-  visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'from_visit_id', 'next_date', 'cost', 'dms', 'note'],
-                 num: ['doctor_id', 'place_id', 'episode_id', 'from_visit_id', 'cost', 'dms'], order: 'date DESC, time DESC' },
+  visits:      { cols: ['date', 'time', 'doctor_id', 'place_id', 'episode_id', 'reason', 'conclusion', 'diagnosis', 'referrals', 'referrals_done', 'from_visit_id', 'from_visit_ids', 'next_date', 'cost', 'dms', 'note'],
+                 json: ['from_visit_ids'], num: ['doctor_id', 'place_id', 'episode_id', 'from_visit_id', 'cost', 'dms', 'referrals_done'], order: 'date DESC, time DESC' },
   courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                  json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'], order: 'active DESC, start_date DESC' },
   intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], order: 'date DESC' },

@@ -281,26 +281,17 @@ async function viewToday() {
         <div class="dose">${fmtDate(v.date)}${v.time ? ' в ' + v.time : ''} · ${untilLabel(v.date, t.date)}${p ? ' · 📍 ' + esc(p.name) : ''}</div></div><span class="muted">›</span></div>`; }).join('')}</div>` : '';
   const feelRow = Object.entries(FEELINGS).map(([v, [e, l]]) => `<button class="feel-btn" data-act="diary-new" data-feeling="${v}" title="${l}">${e}<small>${l}</small></button>`).join('');
 
+  // для гормонов вместо дозы — номер таблетки в пачке (или день перерыва)
+  const k = t.kok;
+  const pillInfo = (c) => k && k.course_id === c.id
+    ? (k.on_break ? `Перерыв: день ${k.break_day} из ${k.break_days} · новая пачка ${fmtDate(k.next_pack)}` : `<b>Таблетка ${k.pill} из ${k.pack_size}</b> · последняя в пачке ${fmtDate(k.last_pill)}`)
+    : `${esc([c.dose, c.med_strength, c.med_form?.toLowerCase()].filter(Boolean).join(' · '))}${c.purpose ? ' — ' + esc(c.purpose) : ''}${c.end_date ? ` · до ${fmtDate(c.end_date)}` : ''}`;
   const pills = t.courses.length ? t.courses.map(c => `
     <div class="pill-row">
       <div class="info"><div class="name">${esc(c.med_name)} ${hormTag(c)}</div>
-        <div class="dose">${esc([c.dose, c.med_strength, c.med_form?.toLowerCase()].filter(Boolean).join(' · '))}${c.purpose ? ' — ' + esc(c.purpose) : ''}${c.end_date ? ` · до ${fmtDate(c.end_date)}` : ''}</div></div>
+        <div class="dose">${pillInfo(c)}</div></div>
       ${c.on_break ? '<span class="tag">перерыв</span>' : `<div class="slots">${c.slots.map(s => `<button class="slot ${s.taken ? 'on' : ''}" data-act="toggle-intake" data-course="${c.id}" data-slot="${s.slot}">${s.taken ? '✓ ' : ''}${s.time || (c.per_day > 1 ? `${s.slot + 1}-й` : 'выпить')}</button>`).join('')}</div>`}
     </div>`).join('') : '<p class="muted">Активных курсов нет. <a href="#meds">Добавить лекарство →</a></p>';
-
-  let kokCard = '';
-  if (t.kok) {
-    const k = t.kok;
-    const pct = k.on_break ? 100 : Math.round((100 * k.pill) / k.pack_size);
-    kokCard = `<div class="card">
-      <div class="card-title"><h2>🌙 ${esc(k.name)}</h2><a href="#cycle" class="small">Цикл →</a></div>
-      ${k.on_break
-        ? `<p><b>Перерыв</b>: день ${k.break_day} из ${k.break_days}. Новая пачка — <b>${fmtDate(k.next_pack)}</b>.</p>`
-        : `<p><b>Таблетка ${k.pill} из ${k.pack_size}</b>. Последняя в пачке — ${fmtDate(k.last_pill)}${k.break_days ? `, перерыв до ${fmtDate(k.next_pack)}` : ''}.</p>`}
-      <div class="progress"><div style="width:${pct}%"></div></div>
-      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${k.course_id}">Начать новую пачку сегодня</button><button class="btn small ghost" data-act="ics-pills">📅 Напоминание в календарь</button></div>
-    </div>`;
-  }
 
   const rem = t.reminders.length ? t.reminders.map(r => {
     const over = r.date < t.date, isToday = r.date === t.date;
@@ -327,7 +318,6 @@ async function viewToday() {
     <div class="card"><h3>Как самочувствие?</h3><div class="feel-picker" style="margin:0">${feelRow}</div></div>
     ${visitsCard}
     <div class="card"><div class="card-title"><h2>💊 Лекарства сегодня</h2><a href="#meds" class="small">Все →</a></div>${pills}</div>
-    ${kokCard}
     <div class="card"><div class="card-title"><h2>🔔 Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
     ${eps ? `<div class="card"><div class="card-title"><h2>🤒 Сейчас болею</h2><a href="#episodes" class="small">Все →</a></div>${eps}</div>` : ''}
     <details class="card"><summary class="small muted" style="cursor:pointer">Статистика за 90 дней</summary>
@@ -405,17 +395,19 @@ async function diaryForm(row = {}, preset = {}) {
 // ---------- Визиты ----------
 const untilLabel = (date, today) => { const n = daysBetween(today, date); return n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${plural(n, 'день', 'дня', 'дней')}`; };
 const visitLabel = (v) => { const d = doctor(v.doctor_id); return `${d ? d.name : 'врач'}${d?.specialty ? ` (${d.specialty})` : ''} · ${fmtDate(v.date)}`; };
+// визиты-источники направления: новое поле-список плюс старое одиночное для совместимости
+const fromIds = (v) => [...new Set([...(Array.isArray(v.from_visit_ids) ? v.from_visit_ids : []), ...(v.from_visit_id ? [v.from_visit_id] : [])].map(Number))];
 function visitItem(v, today = todayStr(), ctx = {}) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
   const future = v.date > today || (v.date === today && !v.conclusion);
-  const from = v.from_visit_id && ctx.byId ? ctx.byId[v.from_visit_id] : null;
-  const followUps = ctx.all ? ctx.all.filter(x => x.from_visit_id === v.id) : [];
+  const froms = ctx.byId ? fromIds(v).map(id => ctx.byId[id]).filter(Boolean) : [];
+  const followUps = ctx.all ? ctx.all.filter(x => fromIds(x).includes(v.id)) : [];
   return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}
     <div class="body">
       <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${future && v.date >= today ? ` <span class="tag accent">${untilLabel(v.date, today)}${v.time ? ' · ' + v.time : ''}</span>` : ''}</div>
       ${p ? `<div class="sub">📍 ${esc(p.name)}${p.address ? ', ' + esc(p.address) : ''}</div>` : ''}
       ${future && v.reason ? `<div class="meta">${esc(v.reason)}</div>` : ''}
-      ${from ? `<div class="meta">↳ по направлению: ${esc(visitLabel(from))}</div>` : ''}
+      ${froms.length ? `<div class="meta">↳ по направлению: ${froms.map(f => esc(visitLabel(f))).join('; ')}</div>` : ''}
       ${followUps.length ? `<div class="meta">→ приём по направлению: ${followUps.map(f => esc(visitLabel(f))).join('; ')}</div>` : ''}
       ${future ? `<div class="row mt"><button class="btn small ghost" data-act="ics-visit" data-id="${v.id}">📅 В календарь</button></div>` : ''}
       ${v.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
@@ -443,7 +435,7 @@ async function viewVisits() {
   // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
   const planned = past.filter(v => v.next_date && v.next_date >= today && !all.some(x => x.date === v.next_date && x.doctor_id === v.doctor_id));
   // направления, по которым ещё нет записи к врачу (за последние полгода)
-  const openReferrals = past.filter(v => v.referrals && v.date >= addDays(today, -180) && !everything.some(x => x.from_visit_id === v.id));
+  const openReferrals = past.filter(v => v.referrals && !v.referrals_done && v.date >= addDays(today, -180) && !everything.some(x => fromIds(x).includes(v.id)));
   const groups = groupBy(past, v => v.date.slice(0, 4));
   const ctx = { all: everything, byId: Object.fromEntries(everything.map(v => [v.id, v])) };
   const dashed = 'style="border:1px dashed var(--line);box-shadow:none;background:transparent"';
@@ -452,7 +444,8 @@ async function viewVisits() {
       <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
   const referralsHtml = openReferrals.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-from-referral" data-id="${v.id}" ${dashed}><div class="feel">📄</div>
       <div class="body"><div class="title muted">Направление: ${esc(v.referrals)}</div>
-      <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)} · <span style="color:var(--accent)">записаться →</span></div></div></div>`; }).join('');
+      <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)} · <span style="color:var(--accent)">записаться →</span></div></div>
+      <button type="button" class="icon-btn" data-act="referral-done" data-id="${v.id}" title="Уже была / не актуально" aria-label="Скрыть">✕</button></div>`; }).join('');
   render(`
     ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит') + ' <a class="btn small" href="#refs">Врачи и места</a>')}
     ${filters}
@@ -468,8 +461,12 @@ async function viewVisits() {
 async function visitForm(id, preset = {}) {
   const [row, allVisits] = await Promise.all([id ? loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset }, GET('/api/visits')]);
   // визиты с направлениями, откуда могла прийти эта запись
-  const refSources = allVisits.filter(v => v.id !== Number(id) && v.referrals && v.date <= (row.date || todayStr())).slice(0, 30)
-    .map(v => [v.id, `${visitLabel(v)} — ${v.referrals.length > 40 ? v.referrals.slice(0, 40) + '…' : v.referrals}`]);
+  const chosen = fromIds(row);
+  // визиты с направлениями за последний год + уже выбранные (даже если старше)
+  const refSources = allVisits.filter(v => v.id !== Number(id) && ((v.referrals && v.date >= addDays(todayStr(), -365)) || chosen.includes(v.id))).slice(0, 30)
+    .map(v => [v.id, `${visitLabel(v)}${v.referrals ? ` — ${v.referrals.length > 50 ? v.referrals.slice(0, 50) + '…' : v.referrals}` : ''}`]);
+  const refBox = refSources.length ? `<div class="field-label">По направлению от <span class="muted">(можно несколько врачей)</span></div>
+    <div class="inline-new" style="padding-top:8px">${refSources.map(([vid, l]) => `<label class="check" style="margin-bottom:8px"><input type="checkbox" name="from_visit_ids[]" value="${vid}" ${chosen.includes(vid) ? 'checked' : ''}><span class="small">${esc(l)}</span></label>`).join('')}</div>` : '';
   openSheet({
     title: id ? (row.date > todayStr() ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
     body: `
@@ -478,7 +475,7 @@ async function visitForm(id, preset = {}) {
       ${refSelect('doctor', row.doctor_id, 'Врач')}
       ${refSelect('place', row.place_id, 'Где')}
       ${refSelect('episode', row.episode_id, 'Относится к болезни')}
-      ${refSources.length || row.from_visit_id ? F.select('from_visit_id', 'По направлению от визита', refSources, row.from_visit_id, { none: '— нет, сама записалась —' }) : ''}
+      ${refBox}
       ${F.area('reason', 'С чем пришла', row.reason, 'Жалобы, повод визита')}
       ${F.area('conclusion', 'Что сказал врач', row.conclusion, 'Заключение, рекомендации, что назначил')}
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
@@ -490,6 +487,9 @@ async function visitForm(id, preset = {}) {
     `,
     onSubmit: async (d, form) => {
       await resolveNew(d);
+      delete d['from_visit_ids[]'];
+      d.from_visit_ids = $$('input[name="from_visit_ids[]"]:checked', form).map(i => Number(i.value));
+      d.from_visit_id = d.from_visit_ids[0] || null;
       const saved = await save('visits', { ...d, id });
       await uploadFiles(form, 'visits', saved.id);
       if (d.place_id) ls.set('last_place', d.place_id);
@@ -706,9 +706,24 @@ function visitEvent(v) {
 }
 const reminderEvent = (r) => icsEvent({ uid: `rem-${r.id}`, date: r.date, title: `🔔 ${r.title}`, desc: r.note });
 const pillEvent = (c, time) => icsEvent({ uid: `pill-${c.id}-${time.replace(':', '')}`, date: c.start_date > todayStr() ? c.start_date : todayStr(), time, title: `💊 ${c.med_name}${c.dose ? ' — ' + c.dose : ''}`, desc: c.purpose, rrule: 'FREQ=DAILY', until: c.end_date });
-async function shareIcs(events, name) {
-  const blob = new Blob([icsCalendar(events)], { type: 'text/calendar;charset=utf-8' });
-  if (await shareOrDownload(blob, name)) toast('Открой файл — Календарь предложит добавить события');
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Safari разрешает «Поделиться» и открытие файла только прямо из нажатия — поэтому показываем окно с кнопками,
+// а не вызываем share после асинхронной загрузки данных (так было раньше, и на iPhone ничего не происходило)
+let pendingIcs = null;
+function shareIcs(events, name) {
+  const ics = icsCalendar(events);
+  pendingIcs = { ics, name, file: new File([ics], name, { type: 'text/calendar' }) };
+  const dataUrl = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+  const n = events.length;
+  openSheet({
+    title: 'Добавить в календарь',
+    body: `<p class="small muted">${plural(n, 'событие', 'события', 'событий')} с напоминаниями. ${IS_IOS ? 'Нажми «Открыть в Календаре» — iPhone покажет список событий и кнопку «Добавить всё». Если откроется пустая страница — используй «Поделиться» и выбери «Календарь» / «Сохранить в Файлы».' : 'Скачается файл .ics — открой его, календарь предложит добавить события.'}</p>
+      <div class="row wrap mb">
+        ${IS_IOS ? `<a class="btn primary" href="${dataUrl}" target="_blank" rel="noopener" data-ics-open>📅 Открыть в Календаре</a>` : `<a class="btn primary" href="${dataUrl}" download="${esc(name)}" data-ics-open>📅 Скачать .ics</a>`}
+        ${navigator.share ? '<button type="button" class="btn" data-ics-share>Поделиться файлом</button>' : ''}
+      </div>
+      <details class="small muted"><summary style="cursor:pointer">Что внутри</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">${esc(events.map(e => (e.match(/SUMMARY:(.*)/) || [])[1]).join('\n'))}</pre></details>`,
+  });
 }
 
 // ---------- Цикл ----------
@@ -755,6 +770,7 @@ async function viewCycle() {
       <div class="stat"><div class="v">${fmtDate(t.cycle.next_predicted)}</div><div class="l">следующие ~</div></div></div>` : ''}
     ${t.kok ? `<div class="card"><div class="card-title"><h2>🌙 ${esc(t.kok.name)}</h2><button class="btn small ghost" data-act="course-edit" data-id="${t.kok.course_id}">Изменить</button></div>
       <p>${t.kok.on_break ? `Перерыв, день ${t.kok.break_day} из ${t.kok.break_days}. Новая пачка — <b>${fmtDate(t.kok.next_pack)}</b>` : `Таблетка <b>${t.kok.pill} из ${t.kok.pack_size}</b>, последняя — ${fmtDate(t.kok.last_pill)}`}</p>
+      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${t.kok.course_id}">Начать новую пачку сегодня</button><button class="btn small ghost" data-act="ics-pills">📅 Напоминание в календарь</button></div>
     </div>` : `<div class="card"><p class="muted">Принимаешь КОК или гестагены? <a href="#" data-act="course-new" data-kok="1">Добавь курс с галочкой «Гормональная терапия»</a> — здесь появится счётчик таблеток и пропусков.</p></div>`}
     <div class="card"><div class="card-title"><h2>Головная боль по дням цикла</h2><span class="muted small">${plural(matched, 'запись', 'записи', 'записей')}</span></div>
       ${matched ? `<div class="vbars" style="margin-bottom:22px">${buckets.map((n, i) => `<div style="height:${(100 * n) / maxB}%;opacity:${n ? 1 : 0.15}" title="день ${i + 1}: ${n}">${i % 5 === 0 ? `<span>${i + 1}</span>` : ''}</div>`).join('')}</div><p class="small muted">Если столбики выше в начале цикла или в перерыве КОК — это менструальная мигрень, стоит обсудить с гинекологом/неврологом.</p>` : '<p class="muted small">Отмечай в дневнике «Мигрень» или «Головная боль» — здесь будет видно, в какие дни цикла она чаще.</p>'}
@@ -1167,19 +1183,20 @@ const actions = {
     await window.localApi.importData({ tables: {} }); await loadRefs(); toast('Все данные удалены'); location.hash = '#today'; route();
   },
   'visit-plan': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: v.next_date, doctor_id: v.doctor_id, place_id: v.place_id, episode_id: v.episode_id, reason: 'Повторный визит' }); },
-  'visit-from-referral': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: addDays(todayStr(), 7), from_visit_id: v.id, episode_id: v.episode_id, doctor_id: null, reason: 'По направлению: ' + v.referrals }); },
-  'ics-visit': async (d) => { const v = await GET(`/api/visits/${d.id}`); await shareIcs([visitEvent(v)], `visit-${v.date}.ics`); },
+  'visit-from-referral': async (d) => { const v = await GET(`/api/visits/${d.id}`); visitForm(null, { date: addDays(todayStr(), 7), from_visit_ids: [v.id], episode_id: v.episode_id, doctor_id: null, reason: 'По направлению: ' + v.referrals }); },
+  'referral-done': async (d) => { if (!confirm('Скрыть это направление из списка «без записи»?')) return; await PUT(`/api/visits/${d.id}`, { referrals_done: 1 }); route(); },
+  'ics-visit': async (d) => { const v = await GET(`/api/visits/${d.id}`); shareIcs([visitEvent(v)], `visit-${v.date}.ics`); },
   'ics-pills': async () => {
     const t = await GET('/api/today?date=' + todayStr());
     const evs = t.courses.flatMap(c => (c.slots || []).map(s => s.time ? pillEvent(c, s.time) : null)).filter(Boolean);
     if (!evs.length) return toast('У активных курсов не указано время приёма — задай его в курсе', true);
-    await shareIcs(evs, 'pills.ics');
+    shareIcs(evs, 'pills.ics');
   },
   'ics-all': async () => {
     const [visits, t] = await Promise.all([GET(`/api/visits?from=${todayStr()}`), GET('/api/today?date=' + todayStr())]);
     const evs = [...visits.filter(v => v.date >= todayStr()).map(visitEvent), ...t.reminders.filter(r => r.date >= todayStr()).map(reminderEvent)];
     if (!evs.length) return toast('Предстоящих визитов и напоминаний нет', true);
-    await shareIcs(evs, `health-${todayStr()}.ics`);
+    shareIcs(evs, `health-${todayStr()}.ics`);
   },
   'cycle-paste': async () => {
     let text = '';
@@ -1234,6 +1251,15 @@ view.addEventListener('change', (e) => {
 
 // ---- поведение внутри формы (делегирование) ----
 const sheetForm = $('#sheet-form');
+sheetForm.addEventListener('click', (e) => {
+  if (e.target.closest('[data-ics-open]')) { setTimeout(closeSheet, 500); return; }
+  const sh = e.target.closest('[data-ics-share]');
+  if (sh && pendingIcs) {
+    const p = pendingIcs;
+    const payload = navigator.canShare?.({ files: [p.file] }) ? { files: [p.file], title: p.name } : { title: p.name, text: p.ics };
+    navigator.share(payload).then(() => { toast('Отправлено'); closeSheet(); }, (err) => { if (err.name !== 'AbortError') toast('Не удалось поделиться: ' + err.message, true); });
+  }
+});
 sheetForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!sheet.onSubmit) return;
