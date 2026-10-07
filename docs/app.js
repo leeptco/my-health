@@ -308,7 +308,7 @@ const addBtn = (act, label) => `<button class="btn primary small desk-only" data
 // ---------- Сегодня ----------
 async function viewToday() {
   const [t, upcomingVisits] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`)]);
-  const upcoming = upcomingVisits.filter(v => v.date > todayStr() || !v.conclusion).sort((a, b) => a.date.localeCompare(b.date));
+  const upcoming = upcomingVisits.filter(v => isUpcoming(v)).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
       ${upcoming.map(v => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="pill-row" data-act="visit-edit" data-id="${v.id}" style="cursor:pointer"><div class="info"><div class="name">${d ? esc(d.name) : 'Врач'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
         <div class="dose">${fmtDate(v.date)}${v.time ? ' в ' + v.time : ''} · ${untilLabel(v.date, t.date)}${p ? ' · ' + esc(p.name) : ''}</div></div><span class="muted">›</span></div>`; }).join('')}</div>` : '';
@@ -432,9 +432,24 @@ const visitLabel = (v) => { const d = doctor(v.doctor_id); return `${d ? d.name 
 const fromIds = (v) => [...new Set([...(Array.isArray(v.from_visit_ids) ? v.from_visit_ids : []), ...(v.from_visit_id ? [v.from_visit_id] : [])].map(Number))];
 // анализы, привязанные к визиту (сданы на приёме или по его направлению)
 const labsOfVisit = (labs, visitId) => (labs || []).filter(l => l.visit_id === visitId).sort((a, b) => a.date.localeCompare(b.date));
+// Предстоящий визит: будущая дата, либо сегодня и время ещё не наступило (без времени — весь день, пока не записано заключение)
+const isUpcoming = (v, today = todayStr()) => v.date > today || (v.date === today && (v.time ? v.time > nowTime() : !v.conclusion));
+// Для выбора «визит врача» в формах: по одному врачу и одной болезни оставляем только последний визит —
+// курс из пяти приёмов у ЛОРа это одна история, выбирать между августом и сентябрём смысла нет. Разные болезни остаются отдельно.
+function latestVisits(visits, keepIds = []) {
+  const groups = new Map();
+  for (const v of [...visits].sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''))) {
+    const key = v.doctor_id ? `${v.doctor_id}|${v.episode_id || ''}` : `v${v.id}`;
+    if (!groups.has(key)) groups.set(key, { ...v, group_n: 1 }); else groups.get(key).group_n++;
+  }
+  const out = [...groups.values()];
+  for (const id of keepIds) if (id && !out.some(v => v.id === Number(id))) { const v = visits.find(x => x.id === Number(id)); if (v) out.push({ ...v, group_n: 1 }); }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+const visitOptLabel = (v, maxRef) => `${visitLabel(v)}${v.group_n > 1 ? ` (${plural(v.group_n, 'визит', 'визита', 'визитов')}, последний)` : ''}${v.referrals ? ` — ${v.referrals.length > maxRef ? v.referrals.slice(0, maxRef) + '…' : v.referrals}` : ''}`;
 function visitItem(v, today = todayStr(), ctx = {}) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
-  const future = v.date > today || (v.date === today && !v.conclusion);
+  const future = isUpcoming(v, today);
   const froms = ctx.byId ? fromIds(v).map(id => ctx.byId[id]).filter(Boolean) : [];
   const followUps = ctx.all ? ctx.all.filter(x => fromIds(x).includes(v.id)) : [];
   const labs = labsOfVisit(ctx.labs, v.id);
@@ -468,12 +483,16 @@ async function viewVisits() {
     ${specs.length > 1 ? `<div class="chips mt"><span class="chip ${!visitsState.spec ? 'on' : ''}" data-act="visits-spec" data-spec="">Все</span>${specs.map(s => `<span class="chip ${visitsState.spec === s ? 'on' : ''}" data-act="visits-spec" data-spec="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
     ${docs.length > 1 ? `<div class="chips mt">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">${esc(d.name)}</span>`).join('')}</div>` : ''}
     </details>` : '';
-  const upcoming = all.filter(v => v.date > today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
-  const past = all.filter(v => v.date <= today);
+  const upcoming = all.filter(v => isUpcoming(v, today)).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  const past = all.filter(v => !isUpcoming(v, today));
   // прошлые визиты, где врач назначил повтор, а записи на него ещё нет
   const planned = past.filter(v => v.next_date && v.next_date >= today && !all.some(x => x.date === v.next_date && x.doctor_id === v.doctor_id));
   // направления, по которым ещё нет записи к врачу (за последние полгода)
-  const openReferrals = past.filter(v => v.referrals && !v.referrals_done && v.date >= addDays(today, -180) && !everything.some(x => fromIds(x).includes(v.id)));
+  // направление считается закрытым, если есть запись по направлению с любого визита той же серии (тот же врач и болезнь)
+  const groupKey = (v) => v.doctor_id ? `${v.doctor_id}|${v.episode_id || ''}` : `v${v.id}`;
+  const byIdAll = Object.fromEntries(everything.map(v => [v.id, v]));
+  const coveredKeys = new Set(everything.flatMap(x => fromIds(x).map(fid => byIdAll[fid]).filter(Boolean).map(groupKey)));
+  const openReferrals = latestVisits(past.filter(v => v.referrals && !v.referrals_done && v.date >= addDays(today, -180) && !coveredKeys.has(groupKey(v))));
   const groups = groupBy(past, v => v.date.slice(0, 4));
   const ctx = { all: everything, byId: Object.fromEntries(everything.map(v => [v.id, v])), labs: allLabs };
   const dashed = 'style="border:1px dashed var(--line);box-shadow:none;background:transparent"';
@@ -482,7 +501,7 @@ async function viewVisits() {
       <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
   const referralsHtml = openReferrals.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-from-referral" data-id="${v.id}" ${dashed}><div class="feel">${ico('file')}</div>
       <div class="body"><div class="title muted">Направление: ${esc(v.referrals)}</div>
-      <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)} · <span style="color:var(--accent)">записаться →</span></div></div>
+      <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)}${v.group_n > 1 ? ` (${plural(v.group_n, 'визит', 'визита', 'визитов')}, последний)` : ''} · <span style="color:var(--accent)">записаться →</span></div></div>
       <button type="button" class="icon-btn" data-act="referral-done" data-id="${v.id}" title="Уже была / не актуально" aria-label="Скрыть">✕</button></div>`; }).join('');
   render(`
     ${pageHead('Визиты к врачам', plural(all.length, 'визит', 'визита', 'визитов'), addBtn('visit-new', 'Визит') + ' <a class="btn small" href="#refs">Врачи и места</a>')}
@@ -508,12 +527,12 @@ async function visitForm(id, preset = {}) {
   // визиты с направлениями, откуда могла прийти эта запись
   const chosen = fromIds(row);
   // визиты с направлениями за последний год + уже выбранные (даже если старше)
-  const refSources = allVisits.filter(v => v.id !== Number(id) && ((v.referrals && v.date >= addDays(todayStr(), -365)) || chosen.includes(v.id))).slice(0, 30)
-    .map(v => [v.id, `${visitLabel(v)}${v.referrals ? ` — ${v.referrals.length > 50 ? v.referrals.slice(0, 50) + '…' : v.referrals}` : ''}`]);
+  const refSources = latestVisits(allVisits.filter(v => v.id !== Number(id) && v.referrals && v.date >= addDays(todayStr(), -365) && v.date <= todayStr()), chosen).slice(0, 30)
+    .map(v => [v.id, visitOptLabel(v, 50)]);
   const refBox = refSources.length ? `<div class="field-label">По направлению от <span class="muted">(можно несколько врачей)</span></div>
     <div class="inline-new" style="padding-top:8px">${refSources.map(([vid, l]) => `<label class="check" style="margin-bottom:8px"><input type="checkbox" name="from_visit_ids[]" value="${vid}" ${chosen.includes(vid) ? 'checked' : ''}><span class="small">${esc(l)}</span></label>`).join('')}</div>` : '';
   openSheet({
-    title: id ? (row.date > todayStr() ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
+    title: id ? (isUpcoming(row) ? 'Предстоящий визит' : 'Визит') : 'Новый визит',
     body: `
       <p class="small muted">Будущая дата — это запись к врачу, она попадёт в «Предстоящие» и на главную. После приёма открой её и допиши, что сказал врач.</p>
       <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.time('time', 'Время', row.time || '')}</div>
@@ -731,8 +750,8 @@ async function labForm(id, preset = {}) {
   const nameChips = topLabNames();
   const indChips = names.slice(0, 16);
   // визит, на котором сдавались анализы (или с которого пришло направление): за последний год плюс уже выбранный
-  const visitOpts = visits.filter(v => v.date <= addDays(todayStr(), 1) && (v.date >= addDays(todayStr(), -365) || v.id === Number(row.visit_id))).slice(0, 40)
-    .map(v => [v.id, `${visitLabel(v)}${v.referrals ? ` — ${v.referrals.length > 40 ? v.referrals.slice(0, 40) + '…' : v.referrals}` : ''}`]);
+  const visitOpts = latestVisits(visits.filter(v => v.date <= addDays(todayStr(), 1) && v.date >= addDays(todayStr(), -365)), [row.visit_id]).slice(0, 40)
+    .map(v => [v.id, visitOptLabel(v, 40)]);
   openSheet({
     title: id ? 'Анализ / обследование' : 'Новый анализ',
     body: `
