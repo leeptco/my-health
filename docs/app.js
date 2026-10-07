@@ -38,17 +38,11 @@ const ICON_PATHS = {
   zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
   ruble: '<path d="M8 21V3h6a4.5 4.5 0 0 1 0 9H5"/><path d="M5 16h9"/>',
-  // шкала самочувствия 1–5: лица без «смайликовости»
-  face1: '<circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M7.5 8 10 9M16.5 8 14 9"/>',
-  face2: '<circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M9 9h.01M15 9h.01"/>',
-  face3: '<circle cx="12" cy="12" r="10"/><path d="M8 15h8"/><path d="M9 9h.01M15 9h.01"/>',
-  face4: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
-  face5: '<circle cx="12" cy="12" r="10"/><path d="M18 13a6 6 0 0 1-6 5 6 6 0 0 1-6-5h12Z"/><path d="M9 9h.01M15 9h.01"/>',
 };
 const ico = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
-const FEELINGS = { 1: [ico('face1', 'face face-1'), 'Очень плохо'], 2: [ico('face2', 'face face-2'), 'Плохо'], 3: [ico('face3', 'face face-3'), 'Так себе'], 4: [ico('face4', 'face face-4'), 'Хорошо'], 5: [ico('face5', 'face face-5'), 'Отлично'] };
+const FEELINGS = { 1: ['😣', 'Очень плохо'], 2: ['😕', 'Плохо'], 3: ['😐', 'Так себе'], 4: ['🙂', 'Хорошо'], 5: ['😄', 'Отлично'] };
 // Текстовые результаты анализов (посев, мазок, тесты): подсказки для поля «Значение»
-const TEXT_VALUES = ['Отрицательно', 'Положительно', 'Не обнаружено', 'Обнаружено', 'Норма', 'Следы', 'Единичные', 'Умеренно', 'Много'];
+const TEXT_VALUES = ['Отрицательно', 'Положительно', 'Не обнаружено', 'Обнаружено', 'Норма'];
 const MED_FORMS = ['Таблетки', 'Капсулы', 'Суспензия', 'Сироп', 'Порошок / саше', 'Капли', 'Спрей', 'Свечи', 'Мазь / крем / гель', 'Раствор', 'Инъекции', 'Пластырь', 'Ингаляции', 'Другое'];
 const PLACE_TYPES = ['Поликлиника', 'Частная клиника', 'Стоматология', 'Лаборатория', 'Больница', 'Аптека', 'Другое'];
 const SPECIALTIES = ['Терапевт', 'Гинеколог', 'Уролог', 'Стоматолог', 'ЛОР', 'Невролог', 'Гастроэнтеролог', 'Эндокринолог', 'Дерматолог', 'Офтальмолог', 'Кардиолог', 'Хирург', 'Психотерапевт', 'УЗИ / диагностика', 'Другое'];
@@ -721,14 +715,15 @@ function resultRow(r = {}) {
   const auto = autoFlag({ ...r, flag: null });
   return `<div class="res-row ${r.flag ? (resOut(r) ? 'out' : 'ok') : auto ? (['high', 'low', 'abn'].includes(auto) ? 'out' : 'ok') : ''}">
     <input name="r_indicator[]" list="indicator-names" placeholder="Показатель" value="${esc(r.indicator || '')}">
-    <input name="r_value[]" list="value-texts" placeholder="Значение" value="${esc(r.value ?? r.value_text ?? '')}" autocapitalize="sentences">
+    <input name="r_value[]" placeholder="Значение" data-res-value value="${esc(r.value ?? r.value_text ?? '')}" autocapitalize="sentences">
     <select name="r_flag[]" title="Оценка"><option value="">${auto ? FLAG_AUTO[auto] : 'авто'}</option>${Object.entries(FLAG_LABEL).map(([v, l]) => `<option value="${v}" ${r.flag === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <button type="button" class="icon-btn" data-del-result aria-label="Убрать показатель">✕</button>
     <div class="res-ref">
       <input name="r_unit[]" placeholder="Ед." value="${esc(r.unit || '')}">
       <input name="r_min[]" placeholder="Норма от" value="${esc(r.ref_min ?? '')}" inputmode="decimal">
       <input name="r_max[]" placeholder="до" value="${esc(r.ref_max ?? '')}" inputmode="decimal">
-    </div></div>`;
+    </div>
+    <div class="res-pick chips" hidden>${TEXT_VALUES.map(v => `<span class="chip" data-res-pick="${v}">${v}</span>`).join('')}</div></div>`;
 }
 async function labForm(id, preset = {}) {
   const [row, names, prev, prevResults, visits] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [], ...preset }, GET('/api/labs/indicator-names'), GET('/api/labs'), GET('/api/lab_results'), GET('/api/visits')]);
@@ -741,7 +736,7 @@ async function labForm(id, preset = {}) {
   openSheet({
     title: id ? 'Анализ / обследование' : 'Новый анализ',
     body: `
-      ${F.datalist('lab-names', LAB_NAMES)}${F.datalist('indicator-names', names.map(n => n.indicator))}${F.datalist('value-texts', TEXT_VALUES)}
+      ${F.datalist('lab-names', LAB_NAMES)}${F.datalist('indicator-names', names.map(n => n.indicator))}
       <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.text('name', 'Что сдавала', row.name, 'list="lab-names" required placeholder="Общий анализ мочи" data-lab-name-input')}</div>
       ${nameChips.length ? `<div class="chips mb">${nameChips.map(n => `<span class="chip" data-lab-name="${esc(n)}">${esc(n)}</span>`).join('')}</div>` : ''}
       <div id="prefill-box" class="mb"></div>
@@ -749,7 +744,7 @@ async function labForm(id, preset = {}) {
       ${refSelect('place', row.place_id, 'Где (лаборатория, клиника)')}
       ${refSelect('doctor', row.doctor_id, 'Кто направил')}
       ${refSelect('episode', row.episode_id, 'Относится к болезни')}
-      <div class="field-label">Показатели <span class="muted">— впиши норму «от–до», и оценка посчитается сама. Для посевов и тестов значение словом: «отрицательно», «положительно», «не обнаружено»</span></div>
+      <div class="field-label">Показатели</div>
       <div id="results-box">${(row.results || []).map(resultRow).join('')}</div>
       <button type="button" class="btn small mb" data-add-result>＋ Показатель</button>
       ${indChips.length ? `<div class="small muted">Частые показатели — нажми, чтобы добавить строку:</div><div class="chips mb">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div>` : ''}
@@ -1398,6 +1393,11 @@ sheetForm.addEventListener('click', async (e) => {
     $('#results-box .res-row:last-child input[name="r_value[]"]', sheetForm).focus(); return;
   }
   if (t.closest('[data-del-result]')) { t.closest('.res-row').remove(); return; }
+  const pick = t.closest('[data-res-pick]');
+  if (pick) {
+    const rowEl = pick.closest('.res-row'), inp = rowEl.querySelector('[data-res-value]');
+    inp.value = pick.dataset.resPick; refreshAutoFlag(rowEl); rowEl.querySelector('.res-pick').hidden = true; return;
+  }
   // из формы визита — к его анализам (визит перед этим сохраняем, чтобы не потерять введённое)
   const openLab = t.closest('[data-open-lab]');
   if (openLab) { try { if (sheet.silentSave) await sheet.silentSave(sheetForm); } catch { return; } labForm(openLab.dataset.openLab); return; }
@@ -1436,6 +1436,15 @@ sheetForm.addEventListener('input', (e) => {
   if (el.dataset.range) $('#' + el.dataset.range, sheetForm).textContent = el.value;
   if (el.dataset.labNameInput !== undefined) renderPrefillHint(sheetForm);
   if (el.closest('.res-row')) refreshAutoFlag(el.closest('.res-row'));
+});
+// варианты «отрицательно / положительно…» показываем, пока поле «Значение» в фокусе; прячем с задержкой, чтобы успел сработать клик по варианту
+sheetForm.addEventListener('focusin', (e) => {
+  const inp = e.target.closest('[data-res-value]');
+  if (inp) { $$('.res-pick', sheetForm).forEach(p => { p.hidden = true; }); inp.closest('.res-row').querySelector('.res-pick').hidden = false; }
+});
+sheetForm.addEventListener('focusout', (e) => {
+  const rowEl = e.target.closest('.res-row'); if (!rowEl) return;
+  setTimeout(() => { if (!rowEl.contains(document.activeElement)) { const p = rowEl.querySelector('.res-pick'); if (p) p.hidden = true; } }, 250);
 });
 sheetForm.addEventListener('keydown', (e) => {
   const el = e.target;

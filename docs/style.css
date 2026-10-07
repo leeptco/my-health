@@ -67,10 +67,8 @@ p { margin: 0 0 8px; }
 .btn .i { width: 18px; height: 18px; }
 .sub .i, .meta .i, .tag .i, .small .i { width: 14px; height: 14px; vertical-align: -2px; color: var(--muted); }
 .tag .i { color: inherit; }
-.feel { display: flex; align-items: center; color: var(--muted); padding-top: 1px; }
+.feel { display: flex; align-items: center; color: var(--muted); padding-top: 1px; font-size: 24px; line-height: 1; }
 .feel .i { width: 26px; height: 26px; }
-.feel .face { stroke-width: 1.6; }
-.face-1 { color: var(--danger); } .face-2 { color: var(--warn); } .face-3 { color: var(--muted); } .face-4, .face-5 { color: var(--good); }
 .feel-picker .i { width: 30px; height: 30px; }
 .file-ico { display: flex; color: var(--muted); } .file-ico .i { width: 22px; height: 22px; }
 .gallery .doc .i { width: 36px; height: 36px; color: var(--muted); }
@@ -184,9 +182,8 @@ input[type=file] { padding: 8px; }
 .res-table td { padding: 3px 6px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .res-table td.out { color: var(--danger); font-weight: 600; }
 .feel-picker { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 12px; }
-.feel-picker button { flex: 1; border: 1px solid var(--line); background: #fbfaf7; border-radius: 12px; padding: 8px 0 6px; font-size: 26px; line-height: 1; cursor: pointer; color: var(--muted); }
+.feel-picker button { flex: 1; border: 1px solid var(--line); background: #fbfaf7; border-radius: 12px; padding: 8px 0; font-size: 26px; cursor: pointer; }
 .feel-picker button.on { border-color: var(--accent); background: var(--accent-soft); }
-.feel-picker button.on .face { stroke-width: 2.1; }
 .feel-picker button small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
 
 /* ---------- Sheet (modal) ---------- */
@@ -249,6 +246,9 @@ td.out { color: var(--danger); font-weight: 600; }
 .res-row { display: grid; grid-template-columns: 2fr 1fr 1.2fr 0.7fr 0.8fr 0.8fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
 .res-row .res-ref { display: contents; }
 .res-row > .icon-btn { order: 9; } /* на широком экране ✕ в конце строки, на телефоне — в конце первой строки */
+/* готовые текстовые значения — появляются под строкой, пока поле «Значение» в фокусе */
+.res-row .res-pick { grid-column: 1 / -1; order: 10; gap: 5px; }
+.res-row .res-pick .chip { padding: 4px 10px; font-size: 13px; }
 .res-row input, .res-row select { padding: 8px 8px; font-size: 14px; min-width: 0; }
 .res-row.out input[name="r_value[]"] { border-color: var(--danger); color: var(--danger); font-weight: 600; }
 .res-row.ok input[name="r_value[]"] { border-color: var(--accent); }
