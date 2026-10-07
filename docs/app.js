@@ -736,13 +736,23 @@ function resultRow(r = {}) {
     <input name="r_indicator[]" list="indicator-names" placeholder="Показатель" value="${esc(r.indicator || '')}">
     <input name="r_value[]" placeholder="Значение" data-res-value value="${esc(r.value ?? r.value_text ?? '')}" autocapitalize="sentences">
     <select name="r_flag[]" title="Оценка"><option value="">${auto ? FLAG_AUTO[auto] : 'авто'}</option>${Object.entries(FLAG_LABEL).map(([v, l]) => `<option value="${v}" ${r.flag === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <button type="button" class="ref-toggle" data-toggle-ref title="Норма и единицы">${refLabel(r)}</button>
     <button type="button" class="icon-btn" data-del-result aria-label="Убрать показатель">✕</button>
-    <div class="res-ref">
+    <div class="res-ref" hidden>
       <input name="r_unit[]" placeholder="Ед." value="${esc(r.unit || '')}">
       <input name="r_min[]" placeholder="Норма от" value="${esc(r.ref_min ?? '')}" inputmode="decimal">
       <input name="r_max[]" placeholder="до" value="${esc(r.ref_max ?? '')}" inputmode="decimal">
     </div>
     <div class="res-pick chips" hidden>${TEXT_VALUES.map(v => `<span class="chip" data-res-pick="${v}">${v}</span>`).join('')}</div></div>`;
+}
+// подпись кнопки нормы в строке: «0–5 мг/л», если норма известна, иначе просто «норма»
+const refLabel = (r) => r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''}–${r.ref_max ?? ''}${r.unit ? ' ' + esc(r.unit) : ''}` : (r.unit ? esc(r.unit) : 'норма');
+// сводка «врач · место · болезнь» для свёрнутого блока в форме анализа
+function labCtxSummary(form) {
+  const el = $('#lab-ctx-sum', form); if (!el) return;
+  const val = (name, list, lbl) => { const v = form.elements[name]?.value; return v && v !== '__new__' ? lbl(byId(list, v)) : ''; };
+  const parts = [val('doctor_id', refs.doctors, d => d?.name), val('place_id', refs.places, p => p?.name), val('episode_id', refs.episodes, e => e?.title)].filter(Boolean);
+  el.textContent = parts.length ? parts.join(' · ') : 'не указано';
 }
 async function labForm(id, preset = {}) {
   const [row, names, prev, prevResults, visits] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [], ...preset }, GET('/api/labs/indicator-names'), GET('/api/labs'), GET('/api/lab_results'), GET('/api/visits')]);
@@ -760,13 +770,13 @@ async function labForm(id, preset = {}) {
       ${nameChips.length ? `<div class="chips mb">${nameChips.map(n => `<span class="chip" data-lab-name="${esc(n)}">${esc(n)}</span>`).join('')}</div>` : ''}
       <div id="prefill-box" class="mb"></div>
       ${visitOpts.length ? F.select('visit_id', 'Визит к врачу (сдано на приёме или по направлению)', visitOpts, row.visit_id, { none: '— не связано с визитом —', attrs: 'data-lab-visit' }) : ''}
-      ${refSelect('place', row.place_id, 'Где (лаборатория, клиника)')}
-      ${refSelect('doctor', row.doctor_id, 'Кто направил')}
-      ${refSelect('episode', row.episode_id, 'Относится к болезни')}
+      <details class="fold mb" id="lab-ctx"><summary>Врач, место, болезнь <span class="muted small" id="lab-ctx-sum"></span></summary>
+        <div class="mt">${refSelect('doctor', row.doctor_id, 'Кто направил')}${refSelect('place', row.place_id, 'Где (лаборатория, клиника)')}${refSelect('episode', row.episode_id, 'Относится к болезни')}</div>
+      </details>
       <div class="field-label">Показатели</div>
       <div id="results-box">${(row.results || []).map(resultRow).join('')}</div>
-      <button type="button" class="btn small mb" data-add-result>＋ Показатель</button>
-      ${indChips.length ? `<div class="small muted">Частые показатели — нажми, чтобы добавить строку:</div><div class="chips mb">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div>` : ''}
+      <div class="row wrap mb"><button type="button" class="btn small" data-add-result>＋ Показатель</button></div>
+      ${indChips.length ? `<details class="fold mb"><summary>Частые показатели</summary><div class="chips mt">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div></details>` : ''}
       <div class="field-row">${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'min="0"')}<div></div></div>
       ${F.check('dms', 'По ДМС', row.dms)}
       ${F.area('note', 'Заметка / заключение', row.note, 'Что сказали по результатам')}
@@ -790,6 +800,7 @@ async function labForm(id, preset = {}) {
     },
     onDelete: id ? async () => { await DEL(`/api/labs/${id}`); toast('Удалено'); route(); } : null,
   });
+  labCtxSummary($('#sheet-form'));
 }
 
 // ---------- Календарь iPhone (.ics) ----------
@@ -1412,6 +1423,8 @@ sheetForm.addEventListener('click', async (e) => {
     $('#results-box .res-row:last-child input[name="r_value[]"]', sheetForm).focus(); return;
   }
   if (t.closest('[data-del-result]')) { t.closest('.res-row').remove(); return; }
+  const tog = t.closest('[data-toggle-ref]');
+  if (tog) { const ref = tog.closest('.res-row').querySelector('.res-ref'); ref.hidden = !ref.hidden; if (!ref.hidden) ref.querySelector('input[name="r_min[]"]').focus(); return; }
   const pick = t.closest('[data-res-pick]');
   if (pick) {
     const rowEl = pick.closest('.res-row'), inp = rowEl.querySelector('[data-res-value]');
@@ -1445,6 +1458,7 @@ sheetForm.addEventListener('change', (e) => {
     const v = (labsState.visits || []).find(x => x.id === Number(el.value));
     if (v) for (const [k, val] of [['doctor_id', v.doctor_id], ['place_id', v.place_id], ['episode_id', v.episode_id]]) { const f = sheetForm.elements[k]; if (f && !f.value && val) f.value = val; }
   }
+  if (['visit_id', 'doctor_id', 'place_id', 'episode_id'].includes(el.name)) labCtxSummary(sheetForm);
   if (el.name === 'r_flag[]') refreshAutoFlag(el.closest('.res-row'));
   if (el.dataset.perDay !== undefined) { const n = Math.min(6, Math.max(1, Number(el.value) || 1)); el.value = n; $('#times-box', sheetForm).innerHTML = timesInputs(n); }
   if (el.dataset.kokToggle !== undefined) { $('#kok-box', sheetForm).hidden = !el.checked; }
@@ -1454,7 +1468,7 @@ sheetForm.addEventListener('input', (e) => {
   const el = e.target;
   if (el.dataset.range) $('#' + el.dataset.range, sheetForm).textContent = el.value;
   if (el.dataset.labNameInput !== undefined) renderPrefillHint(sheetForm);
-  if (el.closest('.res-row')) refreshAutoFlag(el.closest('.res-row'));
+  if (el.closest('.res-row')) { const rowEl = el.closest('.res-row'); refreshAutoFlag(rowEl); if (el.closest('.res-ref')) rowEl.querySelector('[data-toggle-ref]').innerHTML = refLabel(readResultRow(rowEl)); }
 });
 // варианты «отрицательно / положительно…» показываем, пока поле «Значение» в фокусе; прячем с задержкой, чтобы успел сработать клик по варианту
 sheetForm.addEventListener('focusin', (e) => {

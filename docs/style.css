@@ -243,21 +243,27 @@ table.results th { color: var(--muted); font-weight: 500; font-size: 12px; }
 td.out { color: var(--danger); font-weight: 600; }
 /* Строка показателя: показатель · значение · оценка · [ед. · норма от · до] · ✕
    На широком экране — одна строка; на телефоне норма переносится на вторую строку, чтобы её можно было вводить и с телефона */
-.res-row { display: grid; grid-template-columns: 2fr 1fr 1.2fr 0.7fr 0.8fr 0.8fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
-.res-row .res-ref { display: contents; }
-.res-row > .icon-btn { order: 9; } /* на широком экране ✕ в конце строки, на телефоне — в конце первой строки */
+/* Строка показателя: показатель · значение · оценка · [норма] · ✕; норма и единицы раскрываются кнопкой на второй строке */
+.res-row { display: grid; grid-template-columns: 2fr 1.1fr 1.2fr auto auto; gap: 6px; margin-bottom: 8px; align-items: center; }
+.res-row .res-ref { grid-column: 1 / -1; display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; }
+.res-row .res-ref input { font-size: 13px; padding: 6px 8px; background: #fff; }
+.ref-toggle { border: 1px dashed var(--line); background: transparent; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
 /* готовые текстовые значения — появляются под строкой, пока поле «Значение» в фокусе */
-.res-row .res-pick { grid-column: 1 / -1; order: 10; gap: 5px; }
+.res-row .res-pick { grid-column: 1 / -1; gap: 5px; }
 .res-row .res-pick .chip { padding: 4px 10px; font-size: 13px; }
+/* свёрнутые блоки формы */
+details.fold > summary { cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 500; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform 0.15s; color: var(--muted); }
+details.fold[open] > summary::before { transform: rotate(90deg); }
 .res-row input, .res-row select { padding: 8px 8px; font-size: 14px; min-width: 0; }
 .res-row.out input[name="r_value[]"] { border-color: var(--danger); color: var(--danger); font-weight: 600; }
 .res-row.ok input[name="r_value[]"] { border-color: var(--accent); }
 @media (max-width: 600px) {
-  .res-row { grid-template-columns: 1.4fr 1fr 1.1fr auto; row-gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  .res-row > .icon-btn { order: 0; padding: 6px 4px; }
-  .res-row select { padding-right: 24px; background-position: right 6px center; }
-  .res-row .res-ref { display: grid; grid-column: 1 / -1; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; }
-  .res-row .res-ref input { font-size: 13px; padding: 6px 8px; background: #fff; }
+  .res-row { grid-template-columns: 1.3fr 0.95fr 1.15fr auto auto; row-gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .res-row > .icon-btn { padding: 6px 2px; }
+  .res-row select { padding-right: 22px; background-position: right 5px center; }
+  .ref-toggle { max-width: 64px; padding: 6px 5px; }
 }
 
 /* ---------- Toast ---------- */
