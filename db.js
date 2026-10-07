@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS diary_date ON diary(date);
 `);
 
 // Миграции: новые колонки для уже существующих баз
-for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0'], ['episodes', 'chronic', 'INTEGER DEFAULT 0'], ['episodes', 'parent_id', 'INTEGER'], ['visits', 'from_visit_id', 'INTEGER'], ['visits', 'from_visit_ids', 'TEXT'], ['visits', 'referrals_done', 'INTEGER DEFAULT 0'], ['lab_results', 'flag', 'TEXT']]) {
+for (const [t, col, def] of [['visits', 'dms', 'INTEGER DEFAULT 0'], ['labs', 'dms', 'INTEGER DEFAULT 0'], ['episodes', 'chronic', 'INTEGER DEFAULT 0'], ['episodes', 'parent_id', 'INTEGER'], ['visits', 'from_visit_id', 'INTEGER'], ['visits', 'from_visit_ids', 'TEXT'], ['visits', 'referrals_done', 'INTEGER DEFAULT 0'], ['lab_results', 'flag', 'TEXT'], ['labs', 'visit_id', 'INTEGER']]) {
   const cols = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`);
 }
@@ -111,7 +111,7 @@ const TABLES = {
   courses:     { cols: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'dose', 'per_day', 'times', 'start_date', 'end_date', 'is_kok', 'pack_size', 'break_days', 'purpose', 'cost', 'note', 'active'],
                  json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'], order: 'active DESC, start_date DESC' },
   intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], order: 'date DESC' },
-  labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost', 'dms'], order: 'date DESC' },
+  labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'visit_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'visit_id', 'cost', 'dms'], order: 'date DESC' },
   lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'flag', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: 'id' },
   cycles:      { cols: ['start_date', 'end_date', 'flow', 'note'], order: 'start_date DESC' },
   expenses:    { cols: ['date', 'amount', 'category', 'title', 'place_id', 'entity_type', 'entity_id', 'deductible', 'note'],

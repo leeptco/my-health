@@ -9,7 +9,46 @@ const SYMPTOM_GROUPS = [
 ];
 const SYMPTOMS = SYMPTOM_GROUPS.flatMap(g => g[1]);
 const hormTag = (c) => c.is_kok ? `<span class="tag accent">${c.break_days > 0 ? 'КОК' : 'гормоны'}</span>` : '';
-const FEELINGS = { 1: ['😣', 'Очень плохо'], 2: ['😕', 'Плохо'], 3: ['😐', 'Так себе'], 4: ['🙂', 'Хорошо'], 5: ['😄', 'Отлично'] };
+// Нейтральные контурные иконки (SVG, рисуются цветом текста) вместо эмодзи
+const ICON_PATHS = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  steth: '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>',
+  pill: '<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>',
+  flask: '<path d="M10 2v7.5a2 2 0 0 1-.2.9l-5.1 10.2a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4L14.2 10.4a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16.5h10"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  thermo: '<path d="M14 4v10.5a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+  book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  clip: '<path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6A4 4 0 1 1 18 8.8l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  file: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  printer: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  clipboard: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
+  drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4.1 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  phone: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',
+  laptop: '<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.3 2.6a1 1 0 0 1-.9 1.4H3.6a1 1 0 0 1-.9-1.4L4 16"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+  zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  ruble: '<path d="M8 21V3h6a4.5 4.5 0 0 1 0 9H5"/><path d="M5 16h9"/>',
+  // шкала самочувствия 1–5: лица без «смайликовости»
+  face1: '<circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M7.5 8 10 9M16.5 8 14 9"/>',
+  face2: '<circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M9 9h.01M15 9h.01"/>',
+  face3: '<circle cx="12" cy="12" r="10"/><path d="M8 15h8"/><path d="M9 9h.01M15 9h.01"/>',
+  face4: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+  face5: '<circle cx="12" cy="12" r="10"/><path d="M18 13a6 6 0 0 1-6 5 6 6 0 0 1-6-5h12Z"/><path d="M9 9h.01M15 9h.01"/>',
+};
+const ico = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
+const FEELINGS = { 1: [ico('face1', 'face face-1'), 'Очень плохо'], 2: [ico('face2', 'face face-2'), 'Плохо'], 3: [ico('face3', 'face face-3'), 'Так себе'], 4: [ico('face4', 'face face-4'), 'Хорошо'], 5: [ico('face5', 'face face-5'), 'Отлично'] };
+// Текстовые результаты анализов (посев, мазок, тесты): подсказки для поля «Значение»
+const TEXT_VALUES = ['Отрицательно', 'Положительно', 'Не обнаружено', 'Обнаружено', 'Норма', 'Следы', 'Единичные', 'Умеренно', 'Много'];
 const MED_FORMS = ['Таблетки', 'Капсулы', 'Суспензия', 'Сироп', 'Порошок / саше', 'Капли', 'Спрей', 'Свечи', 'Мазь / крем / гель', 'Раствор', 'Инъекции', 'Пластырь', 'Ингаляции', 'Другое'];
 const PLACE_TYPES = ['Поликлиника', 'Частная клиника', 'Стоматология', 'Лаборатория', 'Больница', 'Аптека', 'Другое'];
 const SPECIALTIES = ['Терапевт', 'Гинеколог', 'Уролог', 'Стоматолог', 'ЛОР', 'Невролог', 'Гастроэнтеролог', 'Эндокринолог', 'Дерматолог', 'Офтальмолог', 'Кардиолог', 'Хирург', 'Психотерапевт', 'УЗИ / диагностика', 'Другое'];
@@ -93,7 +132,7 @@ function openSheet({ title, body, submit = 'Сохранить', onSubmit, onDel
   const form = $('#sheet-form'); form.innerHTML = body;
   const foot = $('#sheet-foot'); foot.innerHTML = '';
   if (onDelete) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn danger'; b.textContent = '🗑';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn danger'; b.innerHTML = ico('trash'); b.setAttribute('aria-label', 'Удалить'); b.title = 'Удалить';
     b.onclick = async () => { if (!confirm(deleteConfirm)) return; await onDelete(); closeSheet(); };
     foot.appendChild(b);
   }
@@ -104,7 +143,7 @@ function openSheet({ title, body, submit = 'Сохранить', onSubmit, onDel
     const b = document.createElement('button'); b.type = 'submit'; b.className = 'btn primary'; b.textContent = submit; b.setAttribute('form', 'sheet-form');
     foot.appendChild(b);
   }
-  sheet.onSubmit = onSubmit;
+  sheet.onSubmit = onSubmit; sheet.silentSave = null;
   if (!sheet.open) {
     sheet.scrollY = window.scrollY;
     document.body.classList.add('sheet-open');
@@ -122,7 +161,7 @@ function openSheet({ title, body, submit = 'Сохранить', onSubmit, onDel
 function closeSheet(fromHistory = false) {
   if (!sheet.open) return;
   if (!fromHistory && sheet.pushed) { sheet.pushed = false; history.back(); return; } // popstate вызовет closeSheet(true)
-  sheet.pushed = false; sheet.open = false; sheet.onSubmit = null;
+  sheet.pushed = false; sheet.open = false; sheet.onSubmit = null; sheet.silentSave = null;
   $('#sheet').hidden = true;
   document.body.classList.remove('sheet-open'); document.body.style.top = '';
   window.scrollTo(0, sheet.scrollY);
@@ -216,7 +255,7 @@ function filesBlock(files = [], label = 'Документы (PDF, фото)') {
 const fileHref = (f) => f.url || `/files/${f.id}`;
 function fileRow(f) {
   const isImg = (f.mime || '').startsWith('image/');
-  return `<div class="file" data-file-id="${f.id}">${isImg ? `<img class="thumb" src="${fileHref(f)}" alt="">` : '<span>📄</span>'}
+  return `<div class="file" data-file-id="${f.id}">${isImg ? `<img class="thumb" src="${fileHref(f)}" alt="">` : `<span class="file-ico">${ico('file')}</span>`}
     <a href="${fileHref(f)}" target="_blank" rel="noopener">${esc(f.original_name || 'файл')}</a>
     <span class="muted small nowrap">${Math.round((f.size || 0) / 1024)} КБ</span>
     <button type="button" class="del" data-del-file="${f.id}" title="Удалить">✕</button></div>`;
@@ -276,9 +315,9 @@ const addBtn = (act, label) => `<button class="btn primary small desk-only" data
 async function viewToday() {
   const [t, upcomingVisits] = await Promise.all([GET('/api/today?date=' + todayStr()), GET(`/api/visits?from=${todayStr()}&to=${addDays(todayStr(), 30)}`)]);
   const upcoming = upcomingVisits.filter(v => v.date > todayStr() || !v.conclusion).sort((a, b) => a.date.localeCompare(b.date));
-  const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>🩺 Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
+  const visitsCard = upcoming.length ? `<div class="card"><div class="card-title"><h2>Ближайшие визиты</h2><a href="#visits" class="small">Все →</a></div>
       ${upcoming.map(v => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="pill-row" data-act="visit-edit" data-id="${v.id}" style="cursor:pointer"><div class="info"><div class="name">${d ? esc(d.name) : 'Врач'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}</div>
-        <div class="dose">${fmtDate(v.date)}${v.time ? ' в ' + v.time : ''} · ${untilLabel(v.date, t.date)}${p ? ' · 📍 ' + esc(p.name) : ''}</div></div><span class="muted">›</span></div>`; }).join('')}</div>` : '';
+        <div class="dose">${fmtDate(v.date)}${v.time ? ' в ' + v.time : ''} · ${untilLabel(v.date, t.date)}${p ? ' · ' + esc(p.name) : ''}</div></div><span class="muted">›</span></div>`; }).join('')}</div>` : '';
   const feelRow = Object.entries(FEELINGS).map(([v, [e, l]]) => `<button class="feel-btn" data-act="diary-new" data-feeling="${v}" title="${l}">${e}<small>${l}</small></button>`).join('');
 
   // для гормонов вместо дозы — номер таблетки в пачке (или день перерыва)
@@ -308,7 +347,7 @@ async function viewToday() {
   // напоминание о резервной копии: раз в месяц, только если есть что копировать
   const backupDue = t.has_data && (!t.last_backup || daysBetween(t.last_backup, t.date) >= 30);
   const backupCard = backupDue ? `<div class="card" style="border:1px solid var(--warn);background:var(--warn-soft)">
-      <div class="card-title"><h2>💾 Пора сделать резервную копию</h2></div>
+      <div class="card-title"><h2>Пора сделать резервную копию</h2></div>
       <p class="small">${t.last_backup ? `Последняя копия — ${fmtDate(t.last_backup)}.` : 'Копий ещё не было.'} ${LOCAL ? 'Сохрани файл в «Файлы», iCloud или отправь себе — в него войдут и прикреплённые документы.' : 'Скачай файл и положи в облако или на другой диск. Файлы анализов лежат отдельно в <code>data\\uploads</code>.'}</p>
       ${LOCAL ? '<button class="btn small primary" data-act="backup" data-files="1">Сохранить копию</button>' : '<a class="btn small primary" href="/api/export" download data-act="backup-done">Скачать копию</a>'}</div>` : '';
 
@@ -317,9 +356,9 @@ async function viewToday() {
     ${backupCard}
     <div class="card"><h3>Как самочувствие?</h3><div class="feel-picker" style="margin:0">${feelRow}</div></div>
     ${visitsCard}
-    <div class="card"><div class="card-title"><h2>💊 Лекарства сегодня</h2><a href="#meds" class="small">Все →</a></div>${pills}</div>
-    <div class="card"><div class="card-title"><h2>🔔 Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
-    ${eps ? `<div class="card"><div class="card-title"><h2>🤒 Сейчас болею</h2><a href="#episodes" class="small">Все →</a></div>${eps}</div>` : ''}
+    <div class="card"><div class="card-title"><h2>Лекарства сегодня</h2><a href="#meds" class="small">Все →</a></div>${pills}</div>
+    <div class="card"><div class="card-title"><h2>Напоминания</h2><button class="btn small ghost" data-act="reminder-new">＋ Добавить</button></div>${rem}</div>
+    ${eps ? `<div class="card"><div class="card-title"><h2>Сейчас болею</h2><a href="#episodes" class="small">Все →</a></div>${eps}</div>` : ''}
     <details class="card"><summary class="small muted" style="cursor:pointer">Статистика за 90 дней</summary>
       <div class="grid3 mt">
         <div class="stat"><div class="v">${t.stats.bad_days}</div><div class="l">плохих дней за 90</div></div>
@@ -335,12 +374,12 @@ const diaryState = { filter: null };
 function diaryItem(d) {
   const f = FEELINGS[d.feeling];
   return `<div class="item" data-act="diary-edit" data-id="${d.id}">
-    <div class="feel">${f ? f[0] : '📝'}</div>
+    <div class="feel">${f ? f[0] : ico('pen')}</div>
     <div class="body">
       <div class="title">${fmtDate(d.date)}${d.time ? ' · ' + d.time : ''}${d.severity ? ` <span class="tag ${d.severity >= 7 ? 'danger' : d.severity >= 4 ? 'warn' : ''}">боль ${d.severity}/10</span>` : ''}${d.temperature ? ` <span class="tag warn">${d.temperature}°</span>` : ''}</div>
       <div>${(d.symptoms || []).map(s => `<span class="tag">${esc(s)}</span>`).join('') || `<span class="muted small">${f ? f[1] : ''}</span>`}</div>
       ${d.note ? `<div class="meta">${esc(d.note)}</div>` : ''}
-      ${d.episode_id && episode(d.episode_id) ? `<div class="meta">🤒 ${esc(episode(d.episode_id).title)}</div>` : ''}
+      ${d.episode_id && episode(d.episode_id) ? `<div class="meta">${ico('thermo')} ${esc(episode(d.episode_id).title)}</div>` : ''}
     </div></div>`;
 }
 async function viewDiary() {
@@ -397,27 +436,32 @@ const untilLabel = (date, today) => { const n = daysBetween(today, date); return
 const visitLabel = (v) => { const d = doctor(v.doctor_id); return `${d ? d.name : 'врач'}${d?.specialty ? ` (${d.specialty})` : ''} · ${fmtDate(v.date)}`; };
 // визиты-источники направления: новое поле-список плюс старое одиночное для совместимости
 const fromIds = (v) => [...new Set([...(Array.isArray(v.from_visit_ids) ? v.from_visit_ids : []), ...(v.from_visit_id ? [v.from_visit_id] : [])].map(Number))];
+// анализы, привязанные к визиту (сданы на приёме или по его направлению)
+const labsOfVisit = (labs, visitId) => (labs || []).filter(l => l.visit_id === visitId).sort((a, b) => a.date.localeCompare(b.date));
 function visitItem(v, today = todayStr(), ctx = {}) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
   const future = v.date > today || (v.date === today && !v.conclusion);
   const froms = ctx.byId ? fromIds(v).map(id => ctx.byId[id]).filter(Boolean) : [];
   const followUps = ctx.all ? ctx.all.filter(x => fromIds(x).includes(v.id)) : [];
+  const labs = labsOfVisit(ctx.labs, v.id);
   return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}
     <div class="body">
       <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${future && v.date >= today ? ` <span class="tag accent">${untilLabel(v.date, today)}${v.time ? ' · ' + v.time : ''}</span>` : ''}</div>
-      ${p ? `<div class="sub">📍 ${esc(p.name)}${p.address ? ', ' + esc(p.address) : ''}</div>` : ''}
+      ${p ? `<div class="sub">${ico('pin')} ${esc(p.name)}${p.address ? ', ' + esc(p.address) : ''}</div>` : ''}
       ${future && v.reason ? `<div class="meta">${esc(v.reason)}</div>` : ''}
       ${froms.length ? `<div class="meta">↳ по направлению: ${froms.map(f => esc(visitLabel(f))).join('; ')}</div>` : ''}
       ${followUps.length ? `<div class="meta">→ приём по направлению: ${followUps.map(f => esc(visitLabel(f))).join('; ')}</div>` : ''}
-      ${future ? `<div class="row mt"><button class="btn small ghost" data-act="ics-visit" data-id="${v.id}">📅 В календарь</button></div>` : ''}
+      ${future ? `<div class="row mt"><button class="btn small ghost" data-act="ics-visit" data-id="${v.id}">${ico('calendar')} В календарь</button></div>` : ''}
       ${v.diagnosis ? `<div class="meta"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
       ${v.conclusion ? `<div class="meta ellipsis">${esc(v.conclusion)}</div>` : ''}
-      <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.dms ? '<span class="tag accent">ДМС</span>' : ''}${v.cost && !v.dms ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">🤒 ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
+      ${labs.length ? `<div class="meta">${ico('flask')} Анализы: ${labs.map(l => `<a href="#" data-act="lab-edit" data-id="${l.id}">${esc(l.name)}</a>${l.out_n ? ` <span class="tag danger">${l.out_n} вне нормы</span>` : ''}`).join(', ')}</div>` : ''}
+      <div>${v.next_date ? `<span class="tag ${v.next_date >= todayStr() ? 'accent' : ''}">повтор ${fmtDate(v.next_date)}</span>` : ''}${v.referrals ? '<span class="tag warn">направления</span>' : ''}${v.dms ? '<span class="tag accent">ДМС</span>' : ''}${v.cost && !v.dms ? `<span class="tag">${money(v.cost)}</span>` : ''}${v.episode_id && episode(v.episode_id) ? `<span class="tag">${ico('thermo')} ${esc(episode(v.episode_id).title)}</span>` : ''}</div>
     </div></div>`;
 }
 const visitsState = { spec: null, doc: null };
 async function viewVisits() {
-  const everything = await GET('/api/visits');
+  const [everything, allLabs, allResults] = await Promise.all([GET('/api/visits'), GET('/api/labs'), GET('/api/lab_results')]);
+  for (const l of allLabs) l.out_n = allResults.filter(r => r.lab_id === l.id && resOut(r)).length;
   const today = todayStr();
   const specs = [...new Set(everything.map(v => doctor(v.doctor_id)?.specialty).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
   const docs = [...new Set(everything.map(v => v.doctor_id).filter(Boolean))].map(doctor).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -428,7 +472,7 @@ async function viewVisits() {
   const filters = (specs.length > 1 || docs.length > 1) ? `
     <details class="mb" ${active ? 'open' : ''}><summary class="small" style="cursor:pointer;color:var(--accent)">${active ? `Фильтр: <b>${esc(active)}</b> · изменить` : 'Отфильтровать по врачу или специальности'}</summary>
     ${specs.length > 1 ? `<div class="chips mt"><span class="chip ${!visitsState.spec ? 'on' : ''}" data-act="visits-spec" data-spec="">Все</span>${specs.map(s => `<span class="chip ${visitsState.spec === s ? 'on' : ''}" data-act="visits-spec" data-spec="${esc(s)}">${esc(s)}</span>`).join('')}</div>` : ''}
-    ${docs.length > 1 ? `<div class="chips mt">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">👩‍⚕️ ${esc(d.name)}</span>`).join('')}</div>` : ''}
+    ${docs.length > 1 ? `<div class="chips mt">${docs.filter(d => !visitsState.spec || d.specialty === visitsState.spec).map(d => `<span class="chip ${visitsState.doc === d.id ? 'on' : ''}" data-act="visits-doc" data-id="${d.id}">${esc(d.name)}</span>`).join('')}</div>` : ''}
     </details>` : '';
   const upcoming = all.filter(v => v.date > today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   const past = all.filter(v => v.date <= today);
@@ -437,12 +481,12 @@ async function viewVisits() {
   // направления, по которым ещё нет записи к врачу (за последние полгода)
   const openReferrals = past.filter(v => v.referrals && !v.referrals_done && v.date >= addDays(today, -180) && !everything.some(x => fromIds(x).includes(v.id)));
   const groups = groupBy(past, v => v.date.slice(0, 4));
-  const ctx = { all: everything, byId: Object.fromEntries(everything.map(v => [v.id, v])) };
+  const ctx = { all: everything, byId: Object.fromEntries(everything.map(v => [v.id, v])), labs: allLabs };
   const dashed = 'style="border:1px dashed var(--line);box-shadow:none;background:transparent"';
   const plannedHtml = planned.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-plan" data-id="${v.id}" ${dashed}>${dateCol(v.next_date)}
       <div class="body"><div class="title muted">Повторный визит: ${d ? esc(d.name) : 'врач'}${d?.specialty ? ` · ${esc(d.specialty)}` : ''}</div>
       <div class="sub">назначен на визите ${fmtDate(v.date)} · <span style="color:var(--accent)">создать запись →</span></div></div></div>`; }).join('');
-  const referralsHtml = openReferrals.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-from-referral" data-id="${v.id}" ${dashed}><div class="feel">📄</div>
+  const referralsHtml = openReferrals.map(v => { const d = doctor(v.doctor_id); return `<div class="item" data-act="visit-from-referral" data-id="${v.id}" ${dashed}><div class="feel">${ico('file')}</div>
       <div class="body"><div class="title muted">Направление: ${esc(v.referrals)}</div>
       <div class="sub">от ${d ? esc(d.name) : 'врача'} ${fmtDate(v.date)} · <span style="color:var(--accent)">записаться →</span></div></div>
       <button type="button" class="icon-btn" data-act="referral-done" data-id="${v.id}" title="Уже была / не актуально" aria-label="Скрыть">✕</button></div>`; }).join('');
@@ -459,7 +503,14 @@ async function viewVisits() {
   `);
 }
 async function visitForm(id, preset = {}) {
-  const [row, allVisits] = await Promise.all([id ? loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset }, GET('/api/visits')]);
+  const [row, allVisits, visitLabs, labResults] = await Promise.all([id ? loadFull('visits', id) : { date: todayStr(), time: '', place_id: ls.get('last_place'), ...preset }, GET('/api/visits'), id ? GET(`/api/labs?visit_id=${id}`) : [], id ? GET('/api/lab_results') : []]);
+  // анализы этого визита: сданы на приёме или по его направлению
+  const labsBox = id ? `<div class="field-label">Анализы на этом визите / по направлению</div>
+    <div class="inline-new" style="padding:8px 12px 10px">
+      ${visitLabs.sort((a, b) => a.date.localeCompare(b.date)).map(l => { const n = labResults.filter(r => r.lab_id === l.id && resOut(r)).length; return `<div class="row between" style="padding:4px 0"><span class="small">${fmtDate(l.date)} · ${esc(l.name)}${n ? ` <span class="tag danger">${n} вне нормы</span>` : ''}</span><button type="button" class="btn small ghost" data-open-lab="${l.id}">Открыть</button></div>`; }).join('')}
+      <button type="button" class="btn small" data-new-lab="${id}" style="margin-top:4px">＋ Добавить анализ к визиту</button>
+      <div class="small muted" style="margin-top:6px">Визит сохранится автоматически, затем откроется форма анализа.</div>
+    </div>` : '<p class="small muted">После сохранения визита к нему можно будет привязать анализы, сданные на приёме или по направлению.</p>';
   // визиты с направлениями, откуда могла прийти эта запись
   const chosen = fromIds(row);
   // визиты с направлениями за последний год + уже выбранные (даже если старше)
@@ -480,23 +531,30 @@ async function visitForm(id, preset = {}) {
       ${F.area('conclusion', 'Что сказал врач', row.conclusion, 'Заключение, рекомендации, что назначил')}
       ${F.text('diagnosis', 'Диагноз', row.diagnosis)}
       ${F.area('referrals', 'Направления / что дальше', row.referrals, 'К какому врачу, какие анализы, куда')}
+      ${labsBox}
       <div class="field-row">${F.date('next_date', 'Повторный визит', row.next_date)}${F.number('cost', 'Стоимость, ₽', row.cost ?? '', 'step="1" min="0"')}</div>
       ${F.check('dms', 'По ДМС', row.dms)}
       ${F.area('note', 'Заметка', row.note)}
       ${filesBlock(row.files)}
     `,
     onSubmit: async (d, form) => {
-      await resolveNew(d);
-      delete d['from_visit_ids[]'];
-      d.from_visit_ids = $$('input[name="from_visit_ids[]"]:checked', form).map(i => Number(i.value));
-      d.from_visit_id = d.from_visit_ids[0] || null;
-      const saved = await save('visits', { ...d, id });
-      await uploadFiles(form, 'visits', saved.id);
-      if (d.place_id) ls.set('last_place', d.place_id);
+      await persist(d, form);
       toast('Сохранено'); route();
     },
     onDelete: id ? async () => { await DEL(`/api/visits/${id}`); toast('Удалено'); route(); } : null,
   });
+  async function persist(d, form) {
+    await resolveNew(d);
+    delete d['from_visit_ids[]'];
+    d.from_visit_ids = $$('input[name="from_visit_ids[]"]:checked', form).map(i => Number(i.value));
+    d.from_visit_id = d.from_visit_ids[0] || null;
+    const saved = await save('visits', { ...d, id });
+    await uploadFiles(form, 'visits', saved.id);
+    if (d.place_id) ls.set('last_place', d.place_id);
+    return saved;
+  }
+  // «Добавить анализ к визиту»: тихо сохраняем визит и открываем форму анализа с подставленными датой, врачом, местом и болезнью
+  sheet.silentSave = async (form) => persist(formData(form), form);
 }
 
 // ---------- Лекарства ----------
@@ -506,7 +564,7 @@ function courseItem(c, today) {
   const total = c.end_date ? daysBetween(c.start_date, c.end_date) + 1 : null;
   const done = total ? Math.min(total, Math.max(0, daysBetween(c.start_date, today) + 1)) : null;
   return `<div class="item" data-act="course-edit" data-id="${c.id}">
-    <div class="feel">${c.is_kok ? '🌙' : '💊'}</div>
+    <div class="feel">${ico(c.is_kok ? 'moon' : 'pill')}</div>
     <div class="body">
       <div class="title">${esc(m?.name || 'Препарат')} ${m?.strength ? `<span class="muted">${esc(m.strength)}</span>` : ''} ${hormTag(c)}</div>
       <div class="sub">${esc([m?.form, c.dose, c.per_day ? `${c.per_day} р/день` : ''].filter(Boolean).join(' · '))}${(c.times || []).length ? ' · ' + c.times.join(', ') : ''}</div>
@@ -582,18 +640,20 @@ function renderPrefillHint(form) {
   const p = prevResultsFor(name);
   box.innerHTML = p ? `<button type="button" class="btn small" data-prefill-lab>Подставить показатели из «${esc(p.lab.name)}» от ${fmtDate(p.lab.date)} (${p.results.length})</button>` : '';
 }
-function labItem(l) {
-  const p = place(l.place_id);
+function labItem(l, visitsById = {}) {
+  const p = place(l.place_id), v = l.visit_id ? visitsById[l.visit_id] : null;
   return `<div class="item" data-act="lab-edit" data-id="${l.id}">${dateCol(l.date)}
     <div class="body"><div class="title">${esc(l.name)}</div>
-      ${p ? `<div class="sub">📍 ${esc(p.name)}</div>` : ''}
-      <div>${l.results_n ? `<span class="tag">${plural(l.results_n, 'показатель', 'показателя', 'показателей')}</span>` : ''}${l.out_n ? `<span class="tag danger">${l.out_n} вне нормы</span>` : ''}${l.files_n ? `<span class="tag">📎 ${l.files_n}</span>` : ''}${l.dms ? '<span class="tag accent">ДМС</span>' : ''}${l.cost && !l.dms ? `<span class="tag">${money(l.cost)}</span>` : ''}${l.episode_id && episode(l.episode_id) ? `<span class="tag">🤒 ${esc(episode(l.episode_id).title)}</span>` : ''}</div>
+      ${p ? `<div class="sub">${ico('pin')} ${esc(p.name)}</div>` : ''}
+      ${v ? `<div class="meta">${ico('steth')} Визит: ${esc(visitLabel(v))}</div>` : ''}
+      <div>${l.results_n ? `<span class="tag">${plural(l.results_n, 'показатель', 'показателя', 'показателей')}</span>` : ''}${l.out_n ? `<span class="tag danger">${l.out_n} вне нормы</span>` : l.results_n ? '<span class="tag accent">всё в норме</span>' : ''}${l.files_n ? `<span class="tag">${ico('clip')} ${l.files_n}</span>` : ''}${l.dms ? '<span class="tag accent">ДМС</span>' : ''}${l.cost && !l.dms ? `<span class="tag">${money(l.cost)}</span>` : ''}${l.episode_id && episode(l.episode_id) ? `<span class="tag">${ico('thermo')} ${esc(episode(l.episode_id).title)}</span>` : ''}</div>
       ${l.note ? `<div class="meta ellipsis">${esc(l.note)}</div>` : ''}
     </div></div>`;
 }
 async function viewLabs(params) {
   if (params.mode) labsState.mode = params.mode;
-  const [labs, results, files, ind] = await Promise.all([GET('/api/labs'), GET('/api/lab_results'), GET('/api/files?entity_type=labs'), GET('/api/labs/indicators')]);
+  const [labs, results, files, ind, visits] = await Promise.all([GET('/api/labs'), GET('/api/lab_results'), GET('/api/files?entity_type=labs'), GET('/api/labs/indicators'), GET('/api/visits')]);
+  const visitsById = Object.fromEntries(visits.map(v => [v.id, v]));
   for (const l of labs) {
     const rs = results.filter(r => r.lab_id === l.id);
     l.results_n = rs.length;
@@ -616,41 +676,80 @@ async function viewLabs(params) {
       </div>` : '<div class="empty">Чтобы видеть динамику, добавь в анализ числовые показатели (гемоглобин, ферритин, лейкоциты…)</div>';
   } else {
     const groups = groupBy(labs, l => l.date.slice(0, 4));
-    body = labs.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label">${y}</div><div class="list">${list.map(labItem).join('')}</div>`).join('')
+    body = labs.length ? Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([y, list]) => `<div class="group-label">${y}</div><div class="list">${list.map(l => labItem(l, visitsById)).join('')}</div>`).join('')
       : '<div class="empty">Анализов пока нет. Нажми ＋, прикрепи PDF и внеси ключевые показатели.</div>';
   }
   render(`${pageHead('Анализы', plural(labs.length, 'исследование', 'исследования', 'исследований'), addBtn('lab-new', 'Анализ'))}${seg}${body}${fab('lab-new')}`);
 }
-// Показатель вне нормы: либо врач/лаборатория пометили ↑/↓, либо число вышло за референс
-const FLAG_LABEL = { norm: 'норма', high: '↑ повышено', low: '↓ понижено' };
-const resOut = (r) => r.flag === 'high' || r.flag === 'low' || (r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max)));
-const resFlagTag = (r) => r.flag === 'high' ? ' ↑' : r.flag === 'low' ? ' ↓' : (r.flag === 'norm' ? ' ✓' : '');
-function resultRow(r = {}) {
-  return `<div class="res-row">
-    <input name="r_indicator[]" list="indicator-names" placeholder="Показатель" value="${esc(r.indicator || '')}">
-    <input name="r_value[]" placeholder="Значение" value="${esc(r.value ?? r.value_text ?? '')}" inputmode="decimal">
-    <select name="r_flag[]" title="Оценка"><option value="">—</option>${Object.entries(FLAG_LABEL).map(([v, l]) => `<option value="${v}" ${r.flag === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <input name="r_unit[]" class="desk" placeholder="Ед." value="${esc(r.unit || '')}">
-    <input name="r_min[]" class="desk" placeholder="Норма от" value="${esc(r.ref_min ?? '')}" inputmode="decimal">
-    <input name="r_max[]" class="desk" placeholder="до" value="${esc(r.ref_max ?? '')}" inputmode="decimal">
-    <button type="button" class="icon-btn" data-del-result>✕</button></div>`;
+// Оценка показателя. Автоматически: число сравнивается с нормой (от–до), текст «положительно / обнаружено» — отклонение,
+// «отрицательно / не обнаружено / норма» — норма. Вручную (flag в базе) — только если лаборатория пометила иначе или нормы нет.
+const FLAG_LABEL = { norm: 'норма', high: '↑ повышено', low: '↓ понижено', abn: 'отклонение' };
+const FLAG_SHORT = { norm: '', high: ' ↑', low: ' ↓', abn: '' };
+const FLAG_AUTO = { norm: 'авто: норма', high: 'авто: ↑', low: 'авто: ↓', abn: 'авто: откл.' }; // короткая подпись в селекте
+function autoFlag(r) {
+  if (r.value != null && r.value !== '') {
+    const v = Number(r.value);
+    if (r.ref_min != null && v < r.ref_min) return 'low';
+    if (r.ref_max != null && v > r.ref_max) return 'high';
+    return r.ref_min != null || r.ref_max != null ? 'norm' : null;
+  }
+  const t = String(r.value_text || '').trim().toLowerCase();
+  if (!t) return null;
+  if (/^(не обнаруж|отриц|отр\.|нет\b|норм|в норме|не выявл|абс\.? норм)/.test(t)) return 'norm';
+  if (/^(обнаруж|полож|пол\.|есть\b|выявл|повыш|сниж|пониж)/.test(t)) return 'abn';
+  return null;
 }
-async function labForm(id) {
-  const [row, names, prev, prevResults] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [] }, GET('/api/labs/indicator-names'), GET('/api/labs'), GET('/api/lab_results')]);
-  labsState.names = names; labsState.prev = prev.filter(l => l.id !== Number(id)); labsState.prevResults = prevResults;
+const resFlag = (r) => r.flag || autoFlag(r);
+const resOut = (r) => ['high', 'low', 'abn'].includes(resFlag(r));
+const resFlagTag = (r) => FLAG_SHORT[resFlag(r)] || '';
+// значения строки формы → объект результата (как в базе)
+function readResultRow(rowEl) {
+  const g = (n) => rowEl.querySelector(`[name="${n}[]"]`).value.trim();
+  const numOrNull = (s) => { s = s.replace(',', '.'); return s !== '' && !Number.isNaN(Number(s)) ? Number(s) : null; };
+  const raw = g('r_value');
+  const num = numOrNull(raw);
+  return { indicator: g('r_indicator'), value: num, value_text: num == null && raw !== '' ? raw : null, flag: g('r_flag') || null, unit: g('r_unit') || null, ref_min: numOrNull(g('r_min')), ref_max: numOrNull(g('r_max')) };
+}
+// подпись «авто · норма / ↑ повышено» в селекте оценки
+function refreshAutoFlag(rowEl) {
+  const r = readResultRow(rowEl), sel = rowEl.querySelector('[name="r_flag[]"]');
+  const auto = autoFlag({ ...r, flag: null });
+  sel.options[0].textContent = auto ? FLAG_AUTO[auto] : 'авто';
+  rowEl.classList.toggle('out', resOut(r)); rowEl.classList.toggle('ok', resFlag(r) === 'norm');
+}
+function resultRow(r = {}) {
+  const auto = autoFlag({ ...r, flag: null });
+  return `<div class="res-row ${r.flag ? (resOut(r) ? 'out' : 'ok') : auto ? (['high', 'low', 'abn'].includes(auto) ? 'out' : 'ok') : ''}">
+    <input name="r_indicator[]" list="indicator-names" placeholder="Показатель" value="${esc(r.indicator || '')}">
+    <input name="r_value[]" list="value-texts" placeholder="Значение" value="${esc(r.value ?? r.value_text ?? '')}" autocapitalize="sentences">
+    <select name="r_flag[]" title="Оценка"><option value="">${auto ? FLAG_AUTO[auto] : 'авто'}</option>${Object.entries(FLAG_LABEL).map(([v, l]) => `<option value="${v}" ${r.flag === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <button type="button" class="icon-btn" data-del-result aria-label="Убрать показатель">✕</button>
+    <div class="res-ref">
+      <input name="r_unit[]" placeholder="Ед." value="${esc(r.unit || '')}">
+      <input name="r_min[]" placeholder="Норма от" value="${esc(r.ref_min ?? '')}" inputmode="decimal">
+      <input name="r_max[]" placeholder="до" value="${esc(r.ref_max ?? '')}" inputmode="decimal">
+    </div></div>`;
+}
+async function labForm(id, preset = {}) {
+  const [row, names, prev, prevResults, visits] = await Promise.all([id ? loadFull('labs', id) : { date: todayStr(), place_id: ls.get('last_lab_place'), results: [], ...preset }, GET('/api/labs/indicator-names'), GET('/api/labs'), GET('/api/lab_results'), GET('/api/visits')]);
+  labsState.names = names; labsState.prev = prev.filter(l => l.id !== Number(id)); labsState.prevResults = prevResults; labsState.visits = visits;
   const nameChips = topLabNames();
   const indChips = names.slice(0, 16);
+  // визит, на котором сдавались анализы (или с которого пришло направление): за последний год плюс уже выбранный
+  const visitOpts = visits.filter(v => v.date <= addDays(todayStr(), 1) && (v.date >= addDays(todayStr(), -365) || v.id === Number(row.visit_id))).slice(0, 40)
+    .map(v => [v.id, `${visitLabel(v)}${v.referrals ? ` — ${v.referrals.length > 40 ? v.referrals.slice(0, 40) + '…' : v.referrals}` : ''}`]);
   openSheet({
     title: id ? 'Анализ / обследование' : 'Новый анализ',
     body: `
-      ${F.datalist('lab-names', LAB_NAMES)}${F.datalist('indicator-names', names.map(n => n.indicator))}
+      ${F.datalist('lab-names', LAB_NAMES)}${F.datalist('indicator-names', names.map(n => n.indicator))}${F.datalist('value-texts', TEXT_VALUES)}
       <div class="field-row">${F.date('date', 'Дата', row.date, 'required')}${F.text('name', 'Что сдавала', row.name, 'list="lab-names" required placeholder="Общий анализ мочи" data-lab-name-input')}</div>
       ${nameChips.length ? `<div class="chips mb">${nameChips.map(n => `<span class="chip" data-lab-name="${esc(n)}">${esc(n)}</span>`).join('')}</div>` : ''}
       <div id="prefill-box" class="mb"></div>
+      ${visitOpts.length ? F.select('visit_id', 'Визит к врачу (сдано на приёме или по направлению)', visitOpts, row.visit_id, { none: '— не связано с визитом —', attrs: 'data-lab-visit' }) : ''}
       ${refSelect('place', row.place_id, 'Где (лаборатория, клиника)')}
       ${refSelect('doctor', row.doctor_id, 'Кто направил')}
       ${refSelect('episode', row.episode_id, 'Относится к болезни')}
-      <div class="field-label">Показатели <span class="muted">(на телефоне: показатель и значение; норму можно заполнить с ноутбука)</span></div>
+      <div class="field-label">Показатели <span class="muted">— впиши норму «от–до», и оценка посчитается сама. Для посевов и тестов значение словом: «отрицательно», «положительно», «не обнаружено»</span></div>
       <div id="results-box">${(row.results || []).map(resultRow).join('')}</div>
       <button type="button" class="btn small mb" data-add-result>＋ Показатель</button>
       ${indChips.length ? `<div class="small muted">Частые показатели — нажми, чтобы добавить строку:</div><div class="chips mb">${indChips.map(n => `<span class="chip" data-ind-chip="${esc(n.indicator)}">${esc(n.indicator)}</span>`).join('')}</div>` : ''}
@@ -661,16 +760,14 @@ async function labForm(id) {
     `,
     onSubmit: async (d, form) => {
       await resolveNew(d);
-      const rows = $$('.res-row', form);
-      d.results = rows.map(r => {
-        const g = (n) => r.querySelector(`[name="${n}[]"]`).value.trim();
-        const raw = g('r_value').replace(',', '.');
-        const num = raw !== '' && !Number.isNaN(Number(raw)) ? Number(raw) : null;
-        const numOrNull = (s) => { s = s.replace(',', '.'); return s !== '' && !Number.isNaN(Number(s)) ? Number(s) : null; };
-        // если норма не указана, но показатель уже встречался — подставим прошлую норму
-        const known = labsState.names.find(n => n.indicator.toLowerCase() === g('r_indicator').toLowerCase());
-        return { indicator: g('r_indicator'), value: num, value_text: num == null ? raw : null, flag: g('r_flag') || null, unit: g('r_unit') || known?.unit || null,
-          ref_min: numOrNull(g('r_min')) ?? (g('r_min') === '' ? known?.ref_min ?? null : null), ref_max: numOrNull(g('r_max')) ?? (g('r_max') === '' ? known?.ref_max ?? null : null) };
+      d.results = $$('.res-row', form).map(rowEl => {
+        const r = readResultRow(rowEl);
+        // если норма не указана, но показатель уже встречался — подставим прошлую норму и единицы
+        const known = labsState.names.find(n => n.indicator.toLowerCase() === r.indicator.toLowerCase());
+        if (known) { r.unit ??= known.unit ?? null; if (r.ref_min == null && r.ref_max == null) { r.ref_min = known.ref_min ?? null; r.ref_max = known.ref_max ?? null; } }
+        // ручная оценка хранится только когда отличается от автоматической
+        if (r.flag && r.flag === autoFlag({ ...r, flag: null })) r.flag = null;
+        return r;
       }).filter(r => r.indicator);
       const saved = await save('labs', { ...d, id });
       await uploadFiles(form, 'labs', saved.id);
@@ -702,10 +799,10 @@ function icsEvent({ uid, date, time, title, desc, location, rrule, until }) {
 const icsCalendar = (events) => ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//my-health//RU', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Здоровье', ...events, 'END:VCALENDAR'].join('\r\n') + '\r\n';
 function visitEvent(v) {
   const d = doctor(v.doctor_id), p = place(v.place_id);
-  return icsEvent({ uid: `visit-${v.id}`, date: v.date, time: v.time, title: `🩺 ${d ? d.name : 'Врач'}${d?.specialty ? ` (${d.specialty})` : ''}`, desc: v.reason, location: p ? [p.name, p.address].filter(Boolean).join(', ') : '' });
+  return icsEvent({ uid: `visit-${v.id}`, date: v.date, time: v.time, title: `Приём: ${d ? d.name : 'врач'}${d?.specialty ? ` (${d.specialty})` : ''}`, desc: v.reason, location: p ? [p.name, p.address].filter(Boolean).join(', ') : '' });
 }
-const reminderEvent = (r) => icsEvent({ uid: `rem-${r.id}`, date: r.date, title: `🔔 ${r.title}`, desc: r.note });
-const pillEvent = (c, time) => icsEvent({ uid: `pill-${c.id}-${time.replace(':', '')}`, date: c.start_date > todayStr() ? c.start_date : todayStr(), time, title: `💊 ${c.med_name}${c.dose ? ' — ' + c.dose : ''}`, desc: c.purpose, rrule: 'FREQ=DAILY', until: c.end_date });
+const reminderEvent = (r) => icsEvent({ uid: `rem-${r.id}`, date: r.date, title: r.title, desc: r.note });
+const pillEvent = (c, time) => icsEvent({ uid: `pill-${c.id}-${time.replace(':', '')}`, date: c.start_date > todayStr() ? c.start_date : todayStr(), time, title: `Лекарство: ${c.med_name}${c.dose ? ' — ' + c.dose : ''}`, desc: c.purpose, rrule: 'FREQ=DAILY', until: c.end_date });
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 // Safari разрешает «Поделиться» и открытие файла только прямо из нажатия — поэтому показываем окно с кнопками,
 // а не вызываем share после асинхронной загрузки данных (так было раньше, и на iPhone ничего не происходило)
@@ -719,7 +816,7 @@ function shareIcs(events, name) {
     title: 'Добавить в календарь',
     body: `<p class="small muted">${plural(n, 'событие', 'события', 'событий')} с напоминаниями. ${IS_IOS ? 'Нажми «Открыть в Календаре» — iPhone покажет список событий и кнопку «Добавить всё». Если откроется пустая страница — используй «Поделиться» и выбери «Календарь» / «Сохранить в Файлы».' : 'Скачается файл .ics — открой его, календарь предложит добавить события.'}</p>
       <div class="row wrap mb">
-        ${IS_IOS ? `<a class="btn primary" href="${dataUrl}" target="_blank" rel="noopener" data-ics-open>📅 Открыть в Календаре</a>` : `<a class="btn primary" href="${dataUrl}" download="${esc(name)}" data-ics-open>📅 Скачать .ics</a>`}
+        ${IS_IOS ? `<a class="btn primary" href="${dataUrl}" target="_blank" rel="noopener" data-ics-open>${ico('calendar')} Открыть в Календаре</a>` : `<a class="btn primary" href="${dataUrl}" download="${esc(name)}" data-ics-open>${ico('calendar')} Скачать .ics</a>`}
         ${navigator.share ? '<button type="button" class="btn" data-ics-share>Поделиться файлом</button>' : ''}
       </div>
       <details class="small muted"><summary style="cursor:pointer">Что внутри</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">${esc(events.map(e => (e.match(/SUMMARY:(.*)/) || [])[1]).join('\n'))}</pre></details>`,
@@ -747,12 +844,12 @@ async function viewCycle() {
   render(`
     ${pageHead('Цикл', t.cycle ? `день ${t.cycle.day} · средняя длина ${t.cycle.avg_length}` : 'Отмечай начало месячных — появится статистика')}
     <div class="row wrap mb">
-      ${open ? `<button class="btn primary" data-act="cycle-end">Закончились сегодня</button>` : `<button class="btn primary" data-act="cycle-start">🩸 Начались сегодня</button>`}
+      ${open ? `<button class="btn primary" data-act="cycle-end">Закончились сегодня</button>` : `<button class="btn primary" data-act="cycle-start">${ico('drop')} Начались сегодня</button>`}
       <button class="btn" data-act="cycle-new">＋ Указать даты вручную</button>
     </div>
-    <details class="card"><summary class="small" style="cursor:pointer;color:var(--accent)">📥 Перенести из приложения «Здоровье» (без двойного ввода)</summary>
+    <details class="card"><summary class="small" style="cursor:pointer;color:var(--accent)">Перенести из приложения «Здоровье» (без двойного ввода)</summary>
       <p class="small mt">Прямого доступа к «Здоровью» у веб-приложения нет, но iPhone умеет отдавать данные через «Команды». Один раз создай команду — дальше два нажатия: запустить команду, здесь нажать «Вставить».</p>
-      <div class="row wrap mb"><button class="btn primary small" data-act="cycle-paste">📋 Вставить даты из буфера</button><button class="btn small" data-act="cycle-paste-manual">Ввести текстом</button></div>
+      <div class="row wrap mb"><button class="btn primary small" data-act="cycle-paste">${ico('clipboard')} Вставить даты из буфера</button><button class="btn small" data-act="cycle-paste-manual">Ввести текстом</button></div>
       <p class="small"><b>Команда «Цикл → Здоровье»</b> (приложение «Команды» → ＋):</p>
       <ol class="small" style="padding-left:18px;margin:0 0 8px">
         <li><b>Найти образцы здоровья</b> — тип «Менструация»; фильтр: Дата начала — за последние 120 дней; сортировка не важна.</li>
@@ -768,9 +865,9 @@ async function viewCycle() {
       <div class="stat"><div class="v">${t.cycle.day}</div><div class="l">день цикла</div></div>
       <div class="stat"><div class="v">${t.cycle.avg_length}</div><div class="l">средняя длина</div></div>
       <div class="stat"><div class="v">${fmtDate(t.cycle.next_predicted)}</div><div class="l">следующие ~</div></div></div>` : ''}
-    ${t.kok ? `<div class="card"><div class="card-title"><h2>🌙 ${esc(t.kok.name)}</h2><button class="btn small ghost" data-act="course-edit" data-id="${t.kok.course_id}">Изменить</button></div>
+    ${t.kok ? `<div class="card"><div class="card-title"><h2>${esc(t.kok.name)}</h2><button class="btn small ghost" data-act="course-edit" data-id="${t.kok.course_id}">Изменить</button></div>
       <p>${t.kok.on_break ? `Перерыв, день ${t.kok.break_day} из ${t.kok.break_days}. Новая пачка — <b>${fmtDate(t.kok.next_pack)}</b>` : `Таблетка <b>${t.kok.pill} из ${t.kok.pack_size}</b>, последняя — ${fmtDate(t.kok.last_pill)}`}</p>
-      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${t.kok.course_id}">Начать новую пачку сегодня</button><button class="btn small ghost" data-act="ics-pills">📅 Напоминание в календарь</button></div>
+      <div class="row mt wrap"><button class="btn small ghost" data-act="new-pack" data-course="${t.kok.course_id}">Начать новую пачку сегодня</button><button class="btn small ghost" data-act="ics-pills">${ico('calendar')} Напоминание в календарь</button></div>
     </div>` : `<div class="card"><p class="muted">Принимаешь КОК или гестагены? <a href="#" data-act="course-new" data-kok="1">Добавь курс с галочкой «Гормональная терапия»</a> — здесь появится счётчик таблеток и пропусков.</p></div>`}
     <div class="card"><div class="card-title"><h2>Головная боль по дням цикла</h2><span class="muted small">${plural(matched, 'запись', 'записи', 'записей')}</span></div>
       ${matched ? `<div class="vbars" style="margin-bottom:22px">${buckets.map((n, i) => `<div style="height:${(100 * n) / maxB}%;opacity:${n ? 1 : 0.15}" title="день ${i + 1}: ${n}">${i % 5 === 0 ? `<span>${i + 1}</span>` : ''}</div>`).join('')}</div><p class="small muted">Если столбики выше в начале цикла или в перерыве КОК — это менструальная мигрень, стоит обсудить с гинекологом/неврологом.</p>` : '<p class="muted small">Отмечай в дневнике «Мигрень» или «Головная боль» — здесь будет видно, в какие дни цикла она чаще.</p>'}
@@ -831,7 +928,7 @@ async function viewEpisodes() {
 // Read-only список вложений (без кнопок удаления — они в формах)
 function fileLinks(files) {
   if (!files?.length) return '';
-  return `<div class="files mt">${files.map(f => `<a class="file" href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img class="thumb" src="${fileHref(f)}" alt="">` : '<span>📄</span>'}<span>${esc(f.original_name || 'файл')}</span></a>`).join('')}</div>`;
+  return `<div class="files mt">${files.map(f => `<a class="file" href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img class="thumb" src="${fileHref(f)}" alt="">` : `<span class="file-ico">${ico('file')}</span>`}<span>${esc(f.original_name || 'файл')}</span></a>`).join('')}</div>`;
 }
 function resultsTable(results) {
   if (!results?.length) return '';
@@ -839,7 +936,7 @@ function resultsTable(results) {
     const out = resOut(r);
     const val = r.value != null ? r.value : (r.value_text || (r.flag ? FLAG_LABEL[r.flag] : '—'));
     const ref = r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''}–${r.ref_max ?? ''}` : '';
-    return `<tr><td>${esc(r.indicator)}</td><td class="${out ? 'out' : ''}">${esc(String(val))}${r.value != null || r.value_text ? resFlagTag(r) : ''}${out && !r.flag ? ' ⚠️' : ''}</td><td class="muted">${esc(r.unit || '')}</td><td class="muted">${ref}</td></tr>`;
+    return `<tr><td>${esc(r.indicator)}</td><td class="${out ? 'out' : ''}">${esc(String(val))}${resFlagTag(r)}</td><td class="muted">${esc(r.unit || '')}</td><td class="muted">${ref}</td></tr>`;
   }).join('')}</table>`;
 }
 // Страница одной болезни: всё, что к ней привязано, в одном месте
@@ -861,35 +958,37 @@ async function viewEpisode(params) {
   ];
   const len = daysBetween(e.start_date, e.end_date || today) + 1;
   const when = e.chronic ? `с ${fmtDate(e.start_date)}${e.end_date ? ` · ремиссия с ${fmtDate(e.end_date)}` : ''}` : `${fmtDate(e.start_date)} – ${e.end_date ? fmtDate(e.end_date) : 'сейчас'} · ${plural(len, 'день', 'дня', 'дней')}`;
-  const visitCard = (v) => { const d = doctor(v.doctor_id), p = place(v.place_id); return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}<div class="body">
+  const visitCard = (v) => { const d = doctor(v.doctor_id), p = place(v.place_id); const vl = labsOfVisit(labs, v.id); return `<div class="item" data-act="visit-edit" data-id="${v.id}">${dateCol(v.date)}<div class="body">
       <div class="title">${d ? esc(d.name) : 'Врач не указан'}${d?.specialty ? ` <span class="muted">· ${esc(d.specialty)}</span>` : ''}${v.dms ? ' <span class="tag accent">ДМС</span>' : ''}</div>
-      ${p ? `<div class="sub">📍 ${esc(p.name)}</div>` : ''}
+      ${p ? `<div class="sub">${ico('pin')} ${esc(p.name)}</div>` : ''}
+      ${vl.length ? `<div class="small muted">${ico('flask')} Анализы: ${vl.map(l => esc(l.name)).join(', ')}</div>` : ''}
       ${v.reason ? `<div class="meta"><b>С чем пришла:</b> ${esc(v.reason)}</div>` : ''}
       ${v.conclusion ? `<div class="mt small"><b>Заключение:</b> ${esc(v.conclusion)}</div>` : ''}
       ${v.diagnosis ? `<div class="small"><b>Диагноз:</b> ${esc(v.diagnosis)}</div>` : ''}
       ${v.referrals ? `<div class="small"><b>Направления:</b> ${esc(v.referrals)}</div>` : ''}
       ${v.next_date ? `<div class="small muted">Повтор: ${fmtDate(v.next_date)}</div>` : ''}
       ${fileLinks(v.files)}</div></div>`; };
-  const labCard = (l) => `<div class="item" data-act="lab-edit" data-id="${l.id}">${dateCol(l.date)}<div class="body">
+  const labCard = (l) => { const lv = l.visit_id ? ctx.visits.find(v => v.id === l.visit_id) : null; return `<div class="item" data-act="lab-edit" data-id="${l.id}">${dateCol(l.date)}<div class="body">
       <div class="title">${esc(l.name)}${l.dms ? ' <span class="tag accent">ДМС</span>' : ''}</div>
-      ${l.place_id && place(l.place_id) ? `<div class="sub">📍 ${esc(place(l.place_id).name)}</div>` : ''}
+      ${l.place_id && place(l.place_id) ? `<div class="sub">${ico('pin')} ${esc(place(l.place_id).name)}</div>` : ''}
+      ${lv ? `<div class="small muted">${ico('steth')} Визит: ${esc(visitLabel(lv))}</div>` : ''}
       ${resultsTable(l.results)}
       ${l.note ? `<div class="meta">${esc(l.note)}</div>` : ''}
-      ${fileLinks(l.files)}</div></div>`;
+      ${fileLinks(l.files)}</div></div>`; };
   const courseRow = (c) => { const m = med(c.medication_id); return `<div class="pill-row" data-act="course-edit" data-id="${c.id}" style="cursor:pointer"><div class="info"><div class="name">${esc(m?.name || 'Препарат')}${m?.strength ? ` <span class="muted">${esc(m.strength)}</span>` : ''}</div>
       <div class="dose">${esc([c.dose, c.per_day ? c.per_day + ' р/день' : ''].filter(Boolean).join(', '))} · ${fmtDate(c.start_date)}${c.end_date ? ' – ' + fmtDate(c.end_date) : ''}${c.purpose ? ' — ' + esc(c.purpose) : ''}</div></div><span class="muted">›</span></div>`; };
   render(`
     <div class="page-head"><div><a href="#episodes" class="small">← Болезни</a><h1>${esc(e.title)} ${epTag(e)}</h1><div class="sub">${when}${parent ? ` · обострение: <a href="#episode?id=${parent.id}">${esc(parent.title)}</a>` : ''}</div></div>
       <div class="row no-print"><button class="btn small" data-act="episode-edit" data-id="${e.id}">✎ Править</button></div></div>
     ${e.diagnosis || e.note ? `<div class="card">${e.diagnosis ? `<p><b>Диагноз:</b> ${esc(e.diagnosis)}</p>` : ''}${e.note ? `<p class="small mt">${esc(e.note)}</p>` : ''}</div>` : ''}
-    ${e.chronic ? `<div class="card"><div class="card-title"><h2>🔥 Обострения</h2><button class="btn small ghost" data-act="episode-new-flare" data-id="${e.id}">＋ Обострение</button></div>
+    ${e.chronic ? `<div class="card"><div class="card-title"><h2>Обострения</h2><button class="btn small ghost" data-act="episode-new-flare" data-id="${e.id}">＋ Обострение</button></div>
       ${children.length ? `<div class="list">${children.map(c => episodeItem(c, ctx, today)).join('')}</div>` : '<p class="muted small">Обострений не записано. Когда болезнь даст о себе знать — добавь обострение, и к нему привяжутся визиты и лекарства того периода.</p>'}</div>` : ''}
-    ${visits.length ? `<div class="card"><div class="card-title"><h2>🩺 Визиты и заключения</h2></div><div class="list">${visits.map(visitCard).join('')}</div></div>` : ''}
-    ${courses.length ? `<div class="card"><div class="card-title"><h2>💊 Лекарства</h2></div>${courses.map(courseRow).join('')}</div>` : ''}
-    ${labs.length ? `<div class="card"><div class="card-title"><h2>🧪 Анализы</h2></div><div class="list">${labs.map(labCard).join('')}</div></div>` : ''}
-    ${diary.length ? `<div class="card"><div class="card-title"><h2>📝 Дневник</h2><span class="small muted">${plural(diary.length, 'запись', 'записи', 'записей')}</span></div><div class="list">${diary.map(diaryItem).join('')}</div></div>` : ''}
-    ${allFiles.length ? `<div class="card"><div class="card-title"><h2>📎 Все документы</h2><span class="small muted">${allFiles.length}</span></div>
-      <div class="gallery">${allFiles.map(f => `<a href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img src="${fileHref(f)}" alt="">` : '<div class="doc">📄</div>'}<span class="cap">${esc(f.original_name || 'файл')}<br>${esc(f.cap)}</span></a>`).join('')}</div></div>` : ''}
+    ${visits.length ? `<div class="card"><div class="card-title"><h2>Визиты и заключения</h2></div><div class="list">${visits.map(visitCard).join('')}</div></div>` : ''}
+    ${courses.length ? `<div class="card"><div class="card-title"><h2>Лекарства</h2></div>${courses.map(courseRow).join('')}</div>` : ''}
+    ${labs.length ? `<div class="card"><div class="card-title"><h2>Анализы</h2></div><div class="list">${labs.map(labCard).join('')}</div></div>` : ''}
+    ${diary.length ? `<div class="card"><div class="card-title"><h2>Дневник</h2><span class="small muted">${plural(diary.length, 'запись', 'записи', 'записей')}</span></div><div class="list">${diary.map(diaryItem).join('')}</div></div>` : ''}
+    ${allFiles.length ? `<div class="card"><div class="card-title"><h2>Все документы</h2><span class="small muted">${allFiles.length}</span></div>
+      <div class="gallery">${allFiles.map(f => `<a href="${fileHref(f)}" target="_blank" rel="noopener">${(f.mime || '').startsWith('image/') ? `<img src="${fileHref(f)}" alt="">` : `<div class="doc">${ico('file')}</div>`}<span class="cap">${esc(f.original_name || 'файл')}<br>${esc(f.cap)}</span></a>`).join('')}</div></div>` : ''}
     ${!visits.length && !courses.length && !labs.length && !diary.length && !allFiles.length ? '<div class="empty">К этой болезни пока ничего не привязано. В формах визита, анализа, лекарства и дневника есть поле «Относится к болезни» — выбери её там.</div>' : ''}
   `);
 }
@@ -974,9 +1073,9 @@ async function viewRefs(params) {
   const tabs = [['doctors', 'Врачи'], ['places', 'Места'], ['medications', 'Препараты']];
   const seg = `<div class="seg mb">${tabs.map(([k, l]) => `<button class="${refsState.tab === k ? 'on' : ''}" data-act="refs-tab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   let list;
-  if (refsState.tab === 'doctors') list = refs.doctors.map(d => `<div class="item" data-act="doctor-edit" data-id="${d.id}"><div class="feel">👩‍⚕️</div><div class="body"><div class="title">${esc(d.name)}</div><div class="sub">${esc(d.specialty || '')}${d.place_id && place(d.place_id) ? ' · ' + esc(place(d.place_id).name) : ''}</div>${d.phone ? `<div class="meta"><a href="tel:${esc(d.phone)}">${esc(d.phone)}</a></div>` : ''}${d.note ? `<div class="meta">${esc(d.note)}</div>` : ''}</div></div>`);
-  else if (refsState.tab === 'places') list = refs.places.map(p => `<div class="item" data-act="place-edit" data-id="${p.id}"><div class="feel">📍</div><div class="body"><div class="title">${esc(p.name)}</div><div class="sub">${esc(p.type || '')}${p.address ? ' · ' + esc(p.address) : ''}</div><div class="meta">${p.address ? `<a href="https://yandex.ru/maps/?text=${encodeURIComponent(p.address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Открыть на карте</a>` : ''}${p.phone ? ` · <a href="tel:${esc(p.phone)}" onclick="event.stopPropagation()">${esc(p.phone)}</a>` : ''}</div></div></div>`);
-  else list = refs.medications.map(m => `<div class="item" data-act="med-edit" data-id="${m.id}"><div class="feel">💊</div><div class="body"><div class="title">${esc(m.name)} ${m.strength ? `<span class="muted">${esc(m.strength)}</span>` : ''}</div><div class="sub">${esc(m.form || '')}</div>${m.note ? `<div class="meta">${esc(m.note)}</div>` : ''}</div></div>`);
+  if (refsState.tab === 'doctors') list = refs.doctors.map(d => `<div class="item" data-act="doctor-edit" data-id="${d.id}"><div class="feel">${ico('user')}</div><div class="body"><div class="title">${esc(d.name)}</div><div class="sub">${esc(d.specialty || '')}${d.place_id && place(d.place_id) ? ' · ' + esc(place(d.place_id).name) : ''}</div>${d.phone ? `<div class="meta"><a href="tel:${esc(d.phone)}">${esc(d.phone)}</a></div>` : ''}${d.note ? `<div class="meta">${esc(d.note)}</div>` : ''}</div></div>`);
+  else if (refsState.tab === 'places') list = refs.places.map(p => `<div class="item" data-act="place-edit" data-id="${p.id}"><div class="feel">${ico('pin')}</div><div class="body"><div class="title">${esc(p.name)}</div><div class="sub">${esc(p.type || '')}${p.address ? ' · ' + esc(p.address) : ''}</div><div class="meta">${p.address ? `<a href="https://yandex.ru/maps/?text=${encodeURIComponent(p.address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Открыть на карте</a>` : ''}${p.phone ? ` · <a href="tel:${esc(p.phone)}" onclick="event.stopPropagation()">${esc(p.phone)}</a>` : ''}</div></div></div>`);
+  else list = refs.medications.map(m => `<div class="item" data-act="med-edit" data-id="${m.id}"><div class="feel">${ico('pill')}</div><div class="body"><div class="title">${esc(m.name)} ${m.strength ? `<span class="muted">${esc(m.strength)}</span>` : ''}</div><div class="sub">${esc(m.form || '')}</div>${m.note ? `<div class="meta">${esc(m.note)}</div>` : ''}</div></div>`);
   const addAct = { doctors: 'doctor-new', places: 'place-new', medications: 'med-new' }[refsState.tab];
   render(`${pageHead('Справочники', 'нажми на карточку, чтобы исправить ФИО, адрес или удалить', addBtn(addAct, 'Добавить'))}${seg}<div class="list">${list.length ? list.join('') : '<div class="empty">Пока пусто. Записи появятся автоматически, когда добавишь визит или лекарство.</div>'}</div>${fab(addAct)}`);
 }
@@ -1051,7 +1150,7 @@ const appleHealthCard = () => `<details class="card"><summary class="muted small
       <p class="small mt">Здоровье → фото профиля → <b>Экспортировать все медданные</b> → сохранить ZIP в «Файлы» → нажать на него (распакуется) → выбрать здесь <code>export.xml</code>. Подтянутся дни месячных (как циклы) и межменструальные кровотечения (как «Мазня» в дневнике). Повторный импорт не дублирует. Если проще вести вручную — кнопка «Начались сегодня» в разделе «Цикл» делает то же самое.</p>
       <label class="btn">Загрузить export.xml<input type="file" accept=".xml,text/xml,application/xml" id="health-import" hidden></label>
       <p class="small muted mt" id="health-import-status"></p></details>`;
-const reportCard = () => `<div class="card"><div class="card-title"><h2>📄 Отчёт для врача</h2></div>
+const reportCard = () => `<div class="card"><div class="card-title"><h2>Отчёт для врача</h2></div>
       <p class="muted small">Одна страница: самочувствие, визиты, лекарства и анализы за период. Можно распечатать или сохранить в PDF (на iPhone — Поделиться → Напечатать → PDF).</p>
       <div class="field-row">${F.date('__from', 'С', addDays(todayStr(), -90))}${F.date('__to', 'По', todayStr())}</div>
       <button class="btn primary" data-act="report">Сформировать отчёт</button></div>`;
@@ -1064,7 +1163,7 @@ async function viewExportLocal() {
   render(`
     ${pageHead('Данные и копии')}
     ${reportCard()}
-    <div class="card"><div class="card-title"><h2>📱 Где хранятся данные</h2></div>
+    <div class="card"><div class="card-title"><h2>Где хранятся данные</h2></div>
       <p class="small">Всё лежит <b>внутри этого устройства</b> (в хранилище браузера), никуда не отправляется и работает без интернета. Занято: <b>${fmtBytes(info.usage)}</b>${info.files ? `, вложений: ${info.files}` : ''}${info.persisted === false ? ' · <span style="color:var(--warn)">хранилище не закреплено — добавь приложение на экран «Домой»</span>' : ''}.</p>
       <p class="small" style="color:var(--danger)"><b>Важно:</b> если удалить иконку приложения с экрана «Домой» или очистить данные Safari — база удалится вместе с ними. Поэтому раз в месяц сохраняй копию (напоминание появится на главной).${t.last_backup ? ` Последняя копия — ${fmtDate(t.last_backup)}.` : ''}</p>
       <div class="row wrap">
@@ -1075,14 +1174,14 @@ async function viewExportLocal() {
       <details class="mt"><summary class="small muted" style="cursor:pointer">Начать с чистого листа</summary>
         <p class="small mt">Удаляет все записи и файлы на этом устройстве (например, тестовые). Сначала сохрани копию, если что-то из этого ещё нужно.</p>
         <button class="btn danger small" data-act="wipe">Удалить все данные</button></details></div>
-    <div class="card"><div class="card-title"><h2>📅 Уведомления через Календарь</h2></div>
+    <div class="card"><div class="card-title"><h2>Уведомления через Календарь</h2></div>
       <p class="small">Веб-приложение без сервера не может само присылать уведомления на iPhone, зато может отдать события в «Календарь» — он и напомнит. Файл откроется через «Поделиться»: выбери «Календарь» или сохрани в «Файлы» и нажми на него → «Добавить всё».</p>
       <div class="row wrap"><button class="btn primary" data-act="ics-all">Предстоящие визиты и напоминания</button><button class="btn" data-act="ics-pills">Ежедневные таблетки</button></div>
-      <p class="small muted mt">Визит с временем — напоминание за день и за час; без времени — накануне в 18:00. Таблетки — ежедневное событие во время приёма из курса, до даты окончания курса. Добавила новый визит — нажми «📅 В календарь» прямо на его карточке.</p></div>
+      <p class="small muted mt">Визит с временем — напоминание за день и за час; без времени — накануне в 18:00. Таблетки — ежедневное событие во время приёма из курса, до даты окончания курса. Добавила новый визит — нажми «В календарь» прямо на его карточке.</p></div>
     ${appleHealthCard()}
-    <div class="card"><div class="card-title"><h2>💻 Телефон и ноутбук</h2></div>
+    <div class="card"><div class="card-title"><h2>Телефон и ноутбук</h2></div>
       <p class="small">На ноутбуке открой ту же ссылку — там будет своя, отдельная база. Чтобы перенести данные: на телефоне «Сохранить копию» → файл на ноутбук (iCloud, Telegram, почта) → на ноутбуке «Восстановить из файла». И в обратную сторону так же. Автоматической синхронизации в этом режиме нет — актуальной считай ту копию, где записывала последней.</p></div>
-    <div class="card"><div class="card-title"><h2>🏠 Как поставить на iPhone</h2></div>
+    <div class="card"><div class="card-title"><h2>Как поставить на iPhone</h2></div>
       <p class="small">Открой эту ссылку в Safari → кнопка «Поделиться» → «На экран Домой». Дальше открывай только с иконки: так данные хранятся надёжнее и приложение работает без сети.</p></div>
   `);
   bindImportHandlers();
@@ -1092,19 +1191,16 @@ async function viewExportServer() {
   const y = todayStr().slice(0, 4);
   render(`
     ${pageHead('Экспорт и резервные копии')}
-    <div class="card"><div class="card-title"><h2>📄 Отчёт для врача</h2></div>
-      <p class="muted small">Одна страница: самочувствие, визиты, лекарства и анализы за период. Можно распечатать или сохранить в PDF (на iPhone — Поделиться → Напечатать → PDF).</p>
-      <div class="field-row">${F.date('__from', 'С', addDays(todayStr(), -90))}${F.date('__to', 'По', todayStr())}</div>
-      <button class="btn primary" data-act="report">Сформировать отчёт</button></div>
-    <div class="card"><div class="card-title"><h2>💾 Резервная копия</h2></div>
+    ${reportCard()}
+    <div class="card"><div class="card-title"><h2>Резервная копия</h2></div>
       <p class="muted small">Все данные одним JSON-файлом. Прикреплённые файлы лежат отдельно в папке <code>data/uploads</code> — копируй её вместе с бэкапом.</p>
       <div class="row wrap"><a class="btn" href="/api/export" download>Скачать копию</a>
       <label class="btn">Восстановить из файла<input type="file" accept=".json" id="import-file" hidden></label></div></div>
-    <div class="card"><div class="card-title"><h2>🌙 Цикл из Apple Health / Flo</h2></div>
+    <div class="card"><div class="card-title"><h2>Цикл из Apple Health / Flo</h2></div>
       <p class="small">Прямого API у Flo и «Здоровья» нет, но данные можно перенести файлом. В Flo включи синхронизацию с Apple Health (Flo → Настройки → Apple Health). Затем на iPhone: <b>Здоровье → фото профиля → Экспортировать медданные</b> → сохрани ZIP в «Файлы», нажми на него — распакуется папка, внутри <code>export.xml</code>. Загрузи его сюда: подтянутся дни месячных (как циклы) и межменструальные кровотечения (как записи «Мазня» в дневнике). Повторный импорт ничего не задублирует.</p>
       <label class="btn primary">Загрузить export.xml<input type="file" accept=".xml,text/xml,application/xml" id="health-import" hidden></label>
       <p class="small muted mt" id="health-import-status"></p></div>
-    <div class="card"><div class="card-title"><h2>⚡ Автосинхронизация через «Команды»</h2></div>
+    <div class="card"><div class="card-title"><h2>Автосинхронизация через «Команды»</h2></div>
       <p class="small">Чтобы цикл подтягивался сам, создай на iPhone автоматизацию в приложении «Команды»: <b>Автоматизация → Время суток (ежедневно) → Новая команда</b> с действиями:</p>
       <ol class="small" style="padding-left:18px;margin:0 0 8px">
         <li><b>Найти образцы здоровья</b> — тип «Менструация», фильтр: Дата начала — за последние 90 дней.</li>
@@ -1115,7 +1211,7 @@ async function viewExportServer() {
       </ol>
       <p class="small">Работает только если сайт доступен с телефона (хостинг или та же Wi-Fi сеть). Проверить результат можно на странице «Цикл».</p>
       <div class="row wrap"><code id="api-token" style="word-break:break-all;background:#f6f4ef;padding:6px 10px;border-radius:8px">…</code><button class="btn small" id="copy-token">Скопировать</button><button class="btn small ghost" id="regen-token">Сменить токен</button></div></div>
-    <div class="card"><div class="card-title"><h2>📱 Как поставить на iPhone</h2></div>
+    <div class="card"><div class="card-title"><h2>Как поставить на iPhone</h2></div>
       <p class="small">Открой этот адрес в Safari → кнопка «Поделиться» → «На экран Домой». Приложение откроется без адресной строки, как обычное.</p></div>
     <form method="post" action="/logout" class="mt"><button class="btn ghost">Выйти</button></form>
   `);
@@ -1143,12 +1239,13 @@ async function viewExportServer() {
 }
 async function viewReport(params) {
   const from = params.from || addDays(todayStr(), -90), to = params.to || todayStr();
-  const [diary, visits, courses, labs, results] = await Promise.all([
-    GET(`/api/diary?from=${from}&to=${to}`), GET(`/api/visits?from=${from}&to=${to}`), GET('/api/courses'), GET(`/api/labs?from=${from}&to=${to}`), GET('/api/lab_results')]);
+  const [diary, allVisits, courses, labs, results] = await Promise.all([
+    GET(`/api/diary?from=${from}&to=${to}`), GET('/api/visits'), GET('/api/courses'), GET(`/api/labs?from=${from}&to=${to}`), GET('/api/lab_results')]);
+  const visits = allVisits.filter(v => v.date >= from && v.date <= to);
   const cs = courses.filter(c => c.start_date <= to && (!c.end_date || c.end_date >= from));
   const tr = (...cells) => `<tr>${cells.map(c => `<td>${c ?? ''}</td>`).join('')}</tr>`;
   render(`
-    <div class="row between mb no-print"><a href="#export" class="btn small">← Назад</a><button class="btn primary small" data-act="print">🖨 Печать / PDF</button></div>
+    <div class="row between mb no-print"><a href="#export" class="btn small">← Назад</a><button class="btn primary small" data-act="print">${ico('printer')} Печать / PDF</button></div>
     <div class="report">
       <h1>Выписка из дневника здоровья</h1>
       <p class="muted">Период: ${fmtDate(from)} – ${fmtDate(to)}. Сформировано ${fmtDate(todayStr())}.</p>
@@ -1159,14 +1256,14 @@ async function viewReport(params) {
       <h2>Лекарства (${cs.length})</h2>
       ${cs.length ? `<table><tr><th>Препарат</th><th>Как принимать</th><th>Период</th><th>От чего</th><th>Назначил</th></tr>${cs.map(c => tr(esc(medLabel(med(c.medication_id))), esc([c.dose, c.per_day ? c.per_day + ' р/день' : ''].filter(Boolean).join(', ')), fmtDate(c.start_date) + ' – ' + (c.end_date ? fmtDate(c.end_date) : (c.is_kok ? 'постоянно' : 'по н.в.')), esc(c.purpose), esc(doctor(c.doctor_id)?.name))).join('')}</table>` : '<p class="muted">Нет курсов</p>'}
       <h2>Анализы и обследования (${labs.length})</h2>
-      ${labs.length ? [...labs].reverse().map(l => { const rs = results.filter(r => r.lab_id === l.id); return `<p><b>${fmtDate(l.date)} — ${esc(l.name)}</b>${place(l.place_id) ? ', ' + esc(place(l.place_id).name) : ''}${l.note ? '. ' + esc(l.note) : ''}</p>${rs.length ? `<table><tr><th>Показатель</th><th>Значение</th><th>Норма</th></tr>${rs.map(r => { const out = r.value != null && ((r.ref_min != null && r.value < r.ref_min) || (r.ref_max != null && r.value > r.ref_max)); return tr(esc(r.indicator), `<span class="${out ? 'error' : ''}">${r.value ?? esc(r.value_text)} ${esc(r.unit || '')}</span>`, r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''} – ${r.ref_max ?? ''}` : ''); }).join('')}</table>` : ''}`; }).join('') : '<p class="muted">Нет анализов</p>'}
+      ${labs.length ? [...labs].reverse().map(l => { const rs = results.filter(r => r.lab_id === l.id); const lv = l.visit_id ? allVisits.find(v => v.id === l.visit_id) : null; return `<p><b>${fmtDate(l.date)} — ${esc(l.name)}</b>${place(l.place_id) ? ', ' + esc(place(l.place_id).name) : ''}${lv ? `, визит: ${esc(visitLabel(lv))}` : ''}${l.note ? '. ' + esc(l.note) : ''}</p>${rs.length ? `<table><tr><th>Показатель</th><th>Значение</th><th>Норма</th></tr>${rs.map(r => tr(esc(r.indicator), `<span class="${resOut(r) ? 'error' : ''}">${r.value ?? esc(r.value_text || '')}${resFlagTag(r)} ${esc(r.unit || '')}</span>`, r.ref_min != null || r.ref_max != null ? `${r.ref_min ?? ''} – ${r.ref_max ?? ''}` : '')).join('')}</table>` : ''}`; }).join('') : '<p class="muted">Нет анализов</p>'}
     </div>`);
 }
 
 // ---------- Ещё (мобильное меню) ----------
 function viewMore() {
-  const links = [['#labs', '🧪', 'Анализы', 'результаты, PDF и графики показателей'], ['#cycle', '🌙', 'Цикл и гормоны', 'дни цикла, пачка, пропуски, импорт из Apple Health'], ['#episodes', '🤒', 'Болезни', 'история эпизодов'], ['#expenses', '₽', 'Расходы', 'траты и налоговый вычет'], ['#refs', '📇', 'Справочники', 'врачи, клиники, препараты'], ['#export', '💾', 'Экспорт', 'отчёт для врача, резервная копия']];
-  render(`${pageHead('Ещё')}<div class="list">${links.map(([h, i, t, s]) => `<a class="item" href="${h}"><div class="feel">${i}</div><div class="body"><div class="title">${t}</div><div class="sub">${s}</div></div><span class="muted">›</span></a>`).join('')}</div>`);
+  const links = [['#labs', 'flask', 'Анализы', 'результаты, PDF и графики показателей'], ['#cycle', 'moon', 'Цикл и гормоны', 'дни цикла, пачка, пропуски, импорт из Apple Health'], ['#episodes', 'thermo', 'Болезни', 'история эпизодов'], ['#expenses', 'ruble', 'Расходы', 'траты и налоговый вычет'], ['#refs', 'book', 'Справочники', 'врачи, клиники, препараты'], ['#export', 'download', 'Экспорт', 'отчёт для врача, резервная копия']];
+  render(`${pageHead('Ещё')}<div class="list">${links.map(([h, i, t, s]) => `<a class="item" href="${h}"><div class="feel">${ico(i)}</div><div class="body"><div class="title">${t}</div><div class="sub">${s}</div></div><span class="muted">›</span></a>`).join('')}</div>`);
 }
 
 // ===================== Действия =====================
@@ -1301,6 +1398,16 @@ sheetForm.addEventListener('click', async (e) => {
     $('#results-box .res-row:last-child input[name="r_value[]"]', sheetForm).focus(); return;
   }
   if (t.closest('[data-del-result]')) { t.closest('.res-row').remove(); return; }
+  // из формы визита — к его анализам (визит перед этим сохраняем, чтобы не потерять введённое)
+  const openLab = t.closest('[data-open-lab]');
+  if (openLab) { try { if (sheet.silentSave) await sheet.silentSave(sheetForm); } catch { return; } labForm(openLab.dataset.openLab); return; }
+  const newLab = t.closest('[data-new-lab]');
+  if (newLab) {
+    let v;
+    try { v = sheet.silentSave ? await sheet.silentSave(sheetForm) : await GET(`/api/visits/${newLab.dataset.newLab}`); } catch { return; }
+    labForm(null, { visit_id: v.id, date: v.date <= todayStr() ? v.date : todayStr(), doctor_id: v.doctor_id, place_id: v.place_id, episode_id: v.episode_id });
+    return;
+  }
   const setToday = t.closest('[data-set-today]');
   if (setToday) { sheetForm.elements[setToday.dataset.setToday].value = todayStr(); return; }
   const delFile = t.closest('[data-del-file]');
@@ -1314,6 +1421,12 @@ sheetForm.addEventListener('change', (e) => {
     const d = doctor(el.value), ps = sheetForm.elements.place_id;
     if (d?.place_id && ps && !ps.value) ps.value = d.place_id;
   }
+  if (el.dataset.labVisit !== undefined && el.value) {
+    // анализ привязан к визиту — подставим врача, место и болезнь, если они ещё не выбраны
+    const v = (labsState.visits || []).find(x => x.id === Number(el.value));
+    if (v) for (const [k, val] of [['doctor_id', v.doctor_id], ['place_id', v.place_id], ['episode_id', v.episode_id]]) { const f = sheetForm.elements[k]; if (f && !f.value && val) f.value = val; }
+  }
+  if (el.name === 'r_flag[]') refreshAutoFlag(el.closest('.res-row'));
   if (el.dataset.perDay !== undefined) { const n = Math.min(6, Math.max(1, Number(el.value) || 1)); el.value = n; $('#times-box', sheetForm).innerHTML = timesInputs(n); }
   if (el.dataset.kokToggle !== undefined) { $('#kok-box', sheetForm).hidden = !el.checked; }
   if (el.dataset.chronicToggle !== undefined) { const pb = $('#parent-box', sheetForm); if (pb) pb.hidden = el.checked; }
@@ -1322,6 +1435,7 @@ sheetForm.addEventListener('input', (e) => {
   const el = e.target;
   if (el.dataset.range) $('#' + el.dataset.range, sheetForm).textContent = el.value;
   if (el.dataset.labNameInput !== undefined) renderPrefillHint(sheetForm);
+  if (el.closest('.res-row')) refreshAutoFlag(el.closest('.res-row'));
 });
 sheetForm.addEventListener('keydown', (e) => {
   const el = e.target;

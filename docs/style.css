@@ -58,8 +58,23 @@ p { margin: 0 0 8px; }
   border-top: 1px solid var(--line);
 }
 #nav a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
-#nav a .ico { font-size: 20px; line-height: 1; }
+#nav a .ico { font-size: 20px; line-height: 1; display: flex; }
+#nav a .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #nav a.active { color: var(--accent); }
+
+/* ---------- Иконки (контурные SVG вместо эмодзи) ---------- */
+.i { width: 1em; height: 1em; display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+.btn .i { width: 18px; height: 18px; }
+.sub .i, .meta .i, .tag .i, .small .i { width: 14px; height: 14px; vertical-align: -2px; color: var(--muted); }
+.tag .i { color: inherit; }
+.feel { display: flex; align-items: center; color: var(--muted); padding-top: 1px; }
+.feel .i { width: 26px; height: 26px; }
+.feel .face { stroke-width: 1.6; }
+.face-1 { color: var(--danger); } .face-2 { color: var(--warn); } .face-3 { color: var(--muted); } .face-4, .face-5 { color: var(--good); }
+.feel-picker .i { width: 30px; height: 30px; }
+.file-ico { display: flex; color: var(--muted); } .file-ico .i { width: 22px; height: 22px; }
+.gallery .doc .i { width: 36px; height: 36px; color: var(--muted); }
+.login-logo .i, .login-logo svg { width: 48px; height: 48px; color: var(--accent); }
 #nav .nav-brand { display: none; }
 #nav a.desk { display: none; }
 
@@ -72,7 +87,8 @@ p { margin: 0 0 8px; }
   }
   #nav .nav-brand { display: block; font-weight: 700; font-size: 20px; padding: 6px 12px 18px; letter-spacing: -0.02em; }
   #nav a { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 15px; }
-  #nav a .ico { font-size: 18px; width: 22px; text-align: center; }
+  #nav a .ico { font-size: 18px; width: 22px; text-align: center; justify-content: center; }
+  #nav a .ico svg { width: 20px; height: 20px; }
   #nav a.active { background: var(--accent-soft); }
   #nav a.desk { display: flex; }
   #nav a.mob { display: none; }
@@ -168,8 +184,9 @@ input[type=file] { padding: 8px; }
 .res-table td { padding: 3px 6px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .res-table td.out { color: var(--danger); font-weight: 600; }
 .feel-picker { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 12px; }
-.feel-picker button { flex: 1; border: 1px solid var(--line); background: #fbfaf7; border-radius: 12px; padding: 8px 0; font-size: 26px; cursor: pointer; }
+.feel-picker button { flex: 1; border: 1px solid var(--line); background: #fbfaf7; border-radius: 12px; padding: 8px 0 6px; font-size: 26px; line-height: 1; cursor: pointer; color: var(--muted); }
 .feel-picker button.on { border-color: var(--accent); background: var(--accent-soft); }
+.feel-picker button.on .face { stroke-width: 2.1; }
 .feel-picker button small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
 
 /* ---------- Sheet (modal) ---------- */
@@ -227,9 +244,21 @@ table.results { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.results th, table.results td { padding: 6px 4px; text-align: left; border-bottom: 1px solid var(--line); }
 table.results th { color: var(--muted); font-weight: 500; font-size: 12px; }
 td.out { color: var(--danger); font-weight: 600; }
-.res-row { display: grid; grid-template-columns: 2fr 1fr 1.1fr 0.8fr 0.8fr 0.8fr auto; gap: 6px; margin-bottom: 6px; }
+/* Строка показателя: показатель · значение · оценка · [ед. · норма от · до] · ✕
+   На широком экране — одна строка; на телефоне норма переносится на вторую строку, чтобы её можно было вводить и с телефона */
+.res-row { display: grid; grid-template-columns: 2fr 1fr 1.2fr 0.7fr 0.8fr 0.8fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
+.res-row .res-ref { display: contents; }
+.res-row > .icon-btn { order: 9; } /* на широком экране ✕ в конце строки, на телефоне — в конце первой строки */
 .res-row input, .res-row select { padding: 8px 8px; font-size: 14px; min-width: 0; }
-@media (max-width: 600px) { .res-row { grid-template-columns: 1.5fr 0.9fr 1fr auto; } .res-row .desk { display: none; } }
+.res-row.out input[name="r_value[]"] { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.res-row.ok input[name="r_value[]"] { border-color: var(--accent); }
+@media (max-width: 600px) {
+  .res-row { grid-template-columns: 1.4fr 1fr 1.1fr auto; row-gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .res-row > .icon-btn { order: 0; padding: 6px 4px; }
+  .res-row select { padding-right: 24px; background-position: right 6px center; }
+  .res-row .res-ref { display: grid; grid-column: 1 / -1; grid-template-columns: 0.8fr 1fr 1fr; gap: 6px; }
+  .res-row .res-ref input { font-size: 13px; padding: 6px 8px; background: #fff; }
+}
 
 /* ---------- Toast ---------- */
 #toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + var(--sab) + 20px); transform: translateX(-50%); background: #1c1c1e; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 100; max-width: 90vw; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }

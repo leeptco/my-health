@@ -19,7 +19,7 @@
                    json: ['times'], num: ['medication_id', 'episode_id', 'visit_id', 'doctor_id', 'per_day', 'is_kok', 'pack_size', 'break_days', 'cost', 'active'],
                    defaults: { per_day: 1, is_kok: 0, active: 1 }, order: [['active', -1], ['start_date', -1]] },
     intakes:     { cols: ['course_id', 'date', 'slot', 'taken', 'time', 'note'], num: ['course_id', 'slot', 'taken'], defaults: { slot: 0, taken: 1 }, order: [['date', -1]] },
-    labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1]] },
+    labs:        { cols: ['date', 'name', 'place_id', 'episode_id', 'doctor_id', 'visit_id', 'cost', 'dms', 'note'], num: ['place_id', 'episode_id', 'doctor_id', 'visit_id', 'cost', 'dms'], defaults: { dms: 0 }, order: [['date', -1]] },
     lab_results: { cols: ['lab_id', 'indicator', 'value', 'value_text', 'flag', 'unit', 'ref_min', 'ref_max'], num: ['lab_id', 'value', 'ref_min', 'ref_max'], order: [['id', 1]] },
     cycles:      { cols: ['start_date', 'end_date', 'flow', 'note'], order: [['start_date', -1]] },
     expenses:    { cols: ['date', 'amount', 'category', 'title', 'place_id', 'entity_type', 'entity_id', 'deductible', 'note'],
@@ -169,7 +169,10 @@
     S.tables.reminders = rows('reminders').filter(r => !(r.entity_type === t && r.entity_id === id));
     for (const f of rows('files').filter(f => f.entity_type === t && f.entity_id === id)) await deleteFile(f.id);
     if (t === 'courses') S.tables.intakes = rows('intakes').filter(i => i.course_id !== id);
-    if (t === 'visits') for (const v of rows('visits')) { if (v.from_visit_id === id) v.from_visit_id = null; if (Array.isArray(v.from_visit_ids)) v.from_visit_ids = v.from_visit_ids.filter(x => x !== id); }
+    if (t === 'visits') {
+      for (const v of rows('visits')) { if (v.from_visit_id === id) v.from_visit_id = null; if (Array.isArray(v.from_visit_ids)) v.from_visit_ids = v.from_visit_ids.filter(x => x !== id); }
+      for (const l of rows('labs')) if (l.visit_id === id) l.visit_id = null;
+    }
     if (t === 'labs') S.tables.lab_results = rows('lab_results').filter(r => r.lab_id !== id);
     if (t === 'episodes') {
       for (const tt of ['diary', 'visits', 'courses', 'labs']) for (const r of rows(tt)) if (r.episode_id === id) r.episode_id = null;
